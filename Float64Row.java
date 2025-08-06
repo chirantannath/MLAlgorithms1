@@ -74,4 +74,30 @@ public final class Float64Row implements Row, IntToDoubleFunction {
   //   .mapToDouble(i -> operator.applyAsDouble(getAsDouble(i)))
   //   .toArray());
   // }
+
+  public double distanceEuclidean(Float64Row rightOperand) {
+    if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
+    return Math.sqrt(IntStream.range(0, getRowLength())
+    .mapToDouble(i -> {
+      final var step = getAsDouble(i) - rightOperand.getAsDouble(i);
+      return step * step;
+    }).unordered().sum());
+  }
+  public double distanceManhattan(Float64Row rightOperand) {
+    if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
+    return IntStream.range(0, getRowLength())
+    .mapToDouble(i -> Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i))).unordered().sum();
+  }
+  public double distanceChebyshev(Float64Row rightOperand) {
+    if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
+    return IntStream.range(0, getRowLength())
+    .mapToDouble(i -> Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i))).unordered().max()
+    .orElseThrow(IllegalStateException::new);
+  }
+  public double distanceMinkowski(Float64Row rightOperand, final double p) {
+    if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
+    return Math.pow(IntStream.range(0, getRowLength())
+    .mapToDouble(i -> Math.pow(Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i)), p)).unordered().sum()
+    , 1D/p);
+  }
 }
