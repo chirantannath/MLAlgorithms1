@@ -21,11 +21,9 @@ public final class StringRow implements Row, IntFunction<String>{
   }
   /** Convert another row to this type by calling {@link Object#toString()}. */
   public StringRow(final Row data) {
-    this.data = IntStream.range(0, data.getRowLength())
-    .mapToObj(i -> {
-      final var result = data.get(i);
-      return result == null ? null : result.toString();
-    }).toArray(String[]::new);
+    this.data = new String[data.getRowLength()];
+    for(int i = 0; i < this.data.length; i++)
+      this.data[i] = data.get(i).toString();
   }
 
   @Override public String toString() {return Arrays.toString(data);}
@@ -42,8 +40,9 @@ public final class StringRow implements Row, IntFunction<String>{
   public synchronized void setSynchronized(int index, String value) throws IndexOutOfBoundsException {set(index, value);}
   
   @Override public Class<?>[] getColumnClasses() {
-    return IntStream.range(0, data.length)
-    .mapToObj(i -> (Class<?>)String.class).toArray(Class<?>[]::new);
+    Class<?>[] classes = new Class<?>[getRowLength()];
+    Arrays.fill(classes, String.class);
+    return classes;
   }
   @Override public Class<String> getColumnClass(int index) {return String.class;}
   @Override public int getRowLength() {return data.length;}
@@ -57,6 +56,9 @@ public final class StringRow implements Row, IntFunction<String>{
   }
   @Override public String apply(int index) throws IndexOutOfBoundsException {return get(index);}
   @Override public StringRow project(final int ... indices) throws IndexOutOfBoundsException {
-    return new StringRow(Arrays.stream(indices).mapToObj(this::get).toArray(String[]::new));
+    String[] newRow = new String[indices.length];
+    for(int i = 0; i < indices.length; i++)
+      newRow[i] = get(indices[i]);
+    return new StringRow(newRow);
   }
 }

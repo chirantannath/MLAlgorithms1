@@ -19,9 +19,14 @@ public final class Int64Row implements Row, IntToLongFunction {
   }
   /** Tries to convert an arbitrary row into this class. */
   public Int64Row(final Row dataRow) throws IllegalArgumentException {
-    data = IntStream.range(0, dataRow.getRowLength())
-    .mapToLong(i -> dataRow.getAsNumber(i).orElseThrow(() -> new IllegalArgumentException("Not a number column at position "+i+" for row "+dataRow)).longValue())
-    .toArray();
+    data = new long[dataRow.getRowLength()];
+    for(int i = 0; i < data.length; i++) {
+      try {
+        data[i] = dataRow.getAsNumber(i).orElseThrow().longValue();
+      } catch (NoSuchElementException e) {
+        throw new IllegalArgumentException("Not a number column at position "+i+" for row "+dataRow, e);
+      }
+    }
   }
 
   @Override public String toString() {return Arrays.toString(data);}
@@ -39,8 +44,9 @@ public final class Int64Row implements Row, IntToLongFunction {
   public synchronized void setSynchronized(int index, long value) throws IndexOutOfBoundsException {setAsLong(index, value);}
 
   @Override public Class<?>[] getColumnClasses() {
-    return IntStream.range(0, data.length)
-    .mapToObj(i -> (Class<?>)long.class).toArray(Class<?>[]::new);
+    Class<?>[] classes = new Class<?>[getRowLength()];
+    Arrays.fill(classes, Long.TYPE);
+    return classes;
   }
   @Override public Class<Long> getColumnClass(int index) {return Long.TYPE;}
   @Override public int getRowLength() {return data.length;}
@@ -48,20 +54,24 @@ public final class Int64Row implements Row, IntToLongFunction {
   @Override public Optional<Long> getAsNumber(int index) throws IndexOutOfBoundsException {return Optional.of(getAsLong(index));}
   @Override public long applyAsLong(int index) {return getAsLong(index);}
   @Override public Int64Row project(final int ... indices) throws IndexOutOfBoundsException {
-    return new Int64Row(Arrays.stream(indices).mapToLong(this::getAsLong).toArray());
+    long[] newRow = new long[indices.length];
+    for(int i = 0; i < indices.length; i++)
+      newRow[i] = getAsLong(indices[i]);
+    return new Int64Row(newRow);
   }
 
   public Int64Row doBinaryOperation(LongBinaryOperator op, Int64Row rightOperand) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return new Int64Row(IntStream.range(0, getRowLength())
-    .mapToLong(i -> op.applyAsLong(getAsLong(i), rightOperand.getAsLong(i)))
-    .toArray());
+    long[] newRow = new long[getRowLength()];
+    for(int i = 0; i < newRow.length; i++)
+      newRow[i] = op.applyAsLong(getAsLong(i), rightOperand.getAsLong(i));
+    return new Int64Row(newRow);
   }
-
   public Int64Row doUnaryOperation(LongUnaryOperator op) {
-    return new Int64Row(IntStream.range(0, getRowLength())
-    .mapToLong(i -> op.applyAsLong(getAsLong(i)))
-    .toArray());
+    long[] newRow = new long[getRowLength()];
+    for(int i = 0; i < newRow.length; i++)
+      newRow[i] = op.applyAsLong(getAsLong(i));
+    return new Int64Row(newRow);
   }
 
   public double distanceEuclidean(Int64Row rightOperand) {
@@ -69,27 +79,44 @@ public final class Int64Row implements Row, IntToLongFunction {
   }
   public long distanceEuclideanSquared(Int64Row rightOperand) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return IntStream.range(0, getRowLength())
-    .mapToLong(i -> {
-      final var step = getAsLong(i) - rightOperand.getAsLong(i);
-      return step * step;
-    }).unordered().sum();
+    long sum = 0, step;
+    final int length = getRowLength();
+    for(int i = 0; i < length; i++) {
+      step = getAsLong(i) - rightOperand.getAsLong(i);
+      sum += (step * step);
+    }
+    return sum;
   }
   public long distanceManhattan(Int64Row rightOperand) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return IntStream.range(0, getRowLength())
-    .mapToLong(i -> Math.abs(getAsLong(i) - rightOperand.getAsLong(i))).unordered().sum();
+    long sum = 0, step;
+    final int length = getRowLength();
+    for(int i = 0; i < length; i++) {
+      step = Math.abs(getAsLong(i) - rightOperand.getAsLong(i));
+      sum += step;
+    }
+    return sum;
   }
   public long distanceChebyshev(Int64Row rightOperand) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return IntStream.range(0, getRowLength())
-    .mapToLong(i -> Math.abs(getAsLong(i) - rightOperand.getAsLong(i))).unordered().max()
-    .orElseThrow(IllegalStateException::new);
+    long max, step;
+    final int length = getRowLength();
+    if(length == 0) throw new IllegalStateException();
+    max = Math.abs(getAsLong(0) - rightOperand.getAsLong(0));
+    for(int i = 1; i < length; i++) {
+      step = Math.abs(getAsLong(i) - rightOperand.getAsLong(i));
+      if(step > max) max = step;
+    }
+    return max;
   }
   public double distanceMinkowski(Int64Row rightOperand, final double p) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return Math.pow(IntStream.range(0, getRowLength())
-    .mapToDouble(i -> Math.pow(Math.abs(getAsLong(i) - rightOperand.getAsLong(i)), p)).unordered().sum()
-    , 1D/p);
+    double sum = 0, step;
+    final int length = getRowLength();
+    for(int i = 0; i < length; i++) {
+      step = Math.abs(getAsLong(i) - rightOperand.getAsLong(i));
+      sum += Math.pow(step, p);
+    }
+    return Math.pow(sum, 1D/p);
   }
 }

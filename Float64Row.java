@@ -19,9 +19,14 @@ public final class Float64Row implements Row, IntToDoubleFunction {
   }
   /** Tries to convert an arbitrary row into this class. */
   public Float64Row(final Row dataRow) throws IllegalArgumentException {
-    data = IntStream.range(0, dataRow.getRowLength())
-    .mapToDouble(i -> dataRow.getAsNumber(i).orElseThrow(() -> new IllegalArgumentException("Not a number column at position "+i+" for row "+dataRow)).doubleValue())
-    .toArray();
+    data = new double[dataRow.getRowLength()];
+    for(int i = 0; i < data.length; i++) {
+      try {
+        data[i] = dataRow.getAsNumber(i).orElseThrow().doubleValue();
+      } catch (NoSuchElementException e) {
+        throw new IllegalArgumentException("Not a number column at position "+i+" for row "+dataRow, e);
+      }
+    }
   }
 
   @Override public String toString() {return Arrays.toString(data);}
@@ -39,8 +44,9 @@ public final class Float64Row implements Row, IntToDoubleFunction {
   public synchronized void setSynchronized(int index, double value) throws IndexOutOfBoundsException {setAsDouble(index, value);}
 
   @Override public Class<?>[] getColumnClasses() {
-    return IntStream.range(0, data.length)
-    .mapToObj(i -> (Class<?>)double.class).toArray(Class<?>[]::new);
+    Class<?>[] classes = new Class<?>[getRowLength()];
+    Arrays.fill(classes, Double.TYPE);
+    return classes;
   }
   @Override public Class<Double> getColumnClass(int index) {return Double.TYPE;}
   @Override public int getRowLength() {return data.length;}
@@ -48,56 +54,66 @@ public final class Float64Row implements Row, IntToDoubleFunction {
   @Override public Optional<Double> getAsNumber(int index) throws IndexOutOfBoundsException {return Optional.of(getAsDouble(index));}
   @Override public double applyAsDouble(int index) {return getAsDouble(index);}
   @Override public Float64Row project(final int ... indices) throws IndexOutOfBoundsException {
-    return new Float64Row(Arrays.stream(indices).mapToDouble(this::getAsDouble).toArray());
+    double[] newRow = new double[indices.length];
+    for(int i = 0; i < indices.length; i++)
+      newRow[i] = getAsDouble(indices[i]);
+    return new Float64Row(newRow);
   }
 
   public Float64Row doBinaryOperation(DoubleBinaryOperator op, Float64Row rightOperand) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return new Float64Row(IntStream.range(0, getRowLength())
-    .mapToDouble(i -> op.applyAsDouble(getAsDouble(i), rightOperand.getAsDouble(i)))
-    .toArray());
+    double[] newRow = new double[getRowLength()];
+    for(int i = 0; i < newRow.length; i++)
+      newRow[i] = op.applyAsDouble(getAsDouble(i), rightOperand.getAsDouble(i));
+    return new Float64Row(newRow);
   }
-  // public Float64Row doBinaryOperationParallel(DoubleBinaryOperator operator, Float64Row rightOperand) {
-  //   if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-  //   return new Float64Row(IntStream.range(0, getRowLength()).parallel()
-  //   .mapToDouble(i -> operator.applyAsDouble(getAsDouble(i), rightOperand.getAsDouble(i)))
-  //   .toArray());
-  // }
-  
   public Float64Row doUnaryOperation(DoubleUnaryOperator op) {
-    return new Float64Row(IntStream.range(0, getRowLength())
-    .mapToDouble(i -> op.applyAsDouble(getAsDouble(i)))
-    .toArray());
+    double[] newRow = new double[getRowLength()];
+    for(int i = 0; i < newRow.length; i++)
+      newRow[i] = op.applyAsDouble(getAsDouble(i));
+    return new Float64Row(newRow);
   }
-  // public Float64Row doUnaryOperationParallel(DoubleUnaryOperator operator) {
-  //   return new Float64Row(IntStream.range(0, getRowLength()).parallel()
-  //   .mapToDouble(i -> operator.applyAsDouble(getAsDouble(i)))
-  //   .toArray());
-  // }
-
+  
   public double distanceEuclidean(Float64Row rightOperand) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return Math.sqrt(IntStream.range(0, getRowLength())
-    .mapToDouble(i -> {
-      final var step = getAsDouble(i) - rightOperand.getAsDouble(i);
-      return step * step;
-    }).unordered().sum());
+    double sum = 0, step;
+    final int length = getRowLength();
+    for(int i = 0; i < length; i++) {
+      step = getAsDouble(i) - rightOperand.getAsDouble(i);
+      sum += (step * step);
+    }
+    return Math.sqrt(sum);
   }
   public double distanceManhattan(Float64Row rightOperand) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return IntStream.range(0, getRowLength())
-    .mapToDouble(i -> Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i))).unordered().sum();
+    double sum = 0, step;
+    final int length = getRowLength();
+    for(int i = 0; i < length; i++) {
+      step = Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i));
+      sum += step;
+    }
+    return sum;
   }
   public double distanceChebyshev(Float64Row rightOperand) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return IntStream.range(0, getRowLength())
-    .mapToDouble(i -> Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i))).unordered().max()
-    .orElseThrow(IllegalStateException::new);
+    double max, step;
+    final int length = getRowLength();
+    if(length == 0) throw new IllegalStateException();
+    max = Math.abs(getAsDouble(0) - rightOperand.getAsDouble(0));
+    for(int i = 1; i < length; i++) {
+      step = Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i));
+      if(step > max) max = step;
+    }
+    return max;
   }
   public double distanceMinkowski(Float64Row rightOperand, final double p) {
     if(getRowLength() != rightOperand.getRowLength()) throw new IllegalArgumentException();
-    return Math.pow(IntStream.range(0, getRowLength())
-    .mapToDouble(i -> Math.pow(Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i)), p)).unordered().sum()
-    , 1D/p);
+    double sum = 0, step;
+    final int length = getRowLength();
+    for(int i = 0; i < length; i++) {
+      step = Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i));
+      sum += Math.pow(step, p);
+    }
+    return Math.pow(sum, 1D/p);
   }
 }
