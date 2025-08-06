@@ -87,4 +87,6 @@ nb-configuration.xml
 ## Test files
 ##############################
 *.csv
-TestMain.java   
+TestMain.java
+*.ipynb
+.ipynb_checkpoints/   
