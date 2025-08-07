@@ -67,7 +67,7 @@ final class ClassifierTest {
       final var counter = new java.util.concurrent.atomic.AtomicInteger(0);
       ts = System.currentTimeMillis();
       int trainScore = (int) IntStream.range(0, trainSize).unordered().parallel()
-          .peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), trainSize))
+          //.peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), trainSize))
           .filter(i -> Objects.equals(outcomeTrain.get(i), classifier.predict(inputTrain.get(i))))
           .count();
       ts = System.currentTimeMillis() - ts;
@@ -76,7 +76,7 @@ final class ClassifierTest {
       counter.set(0);
       ts = System.currentTimeMillis();
       int testScore = (int) IntStream.range(0, testSize).unordered().parallel()
-          .peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), testSize))
+          //.peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), testSize))
           .filter(i -> Objects.equals(outcomeTest.get(i), classifier.predict(inputTest.get(i))))
           .count();
       ts = System.currentTimeMillis() - ts;
@@ -100,7 +100,7 @@ final class ClassifierTest {
       final var counter = new java.util.concurrent.atomic.AtomicInteger(0);
       ts = System.currentTimeMillis();
       int trainScore = (int) IntStream.range(0, trainSize).unordered().parallel()
-          .peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), trainSize))
+          //.peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), trainSize))
           .filter(i -> Objects.equals(outcomeTrain.get(i), classifier.predict(inputTrain.get(i))))
           .count();
       ts = System.currentTimeMillis() - ts;
@@ -109,7 +109,7 @@ final class ClassifierTest {
       counter.set(0);
       ts = System.currentTimeMillis();
       int testScore = (int) IntStream.range(0, testSize).unordered().parallel()
-          .peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), testSize))
+          //.peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), testSize))
           .filter(i -> Objects.equals(outcomeTest.get(i), classifier.predict(inputTest.get(i))))
           .count();
       ts = System.currentTimeMillis() - ts;

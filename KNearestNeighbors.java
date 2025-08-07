@@ -1,6 +1,6 @@
 import java.util.*;
 import java.util.function.*;
-import java.util.stream.Collectors;
+import java.util.stream.*;
 
 public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
   /** Combined type to store input-output combination. */
@@ -29,13 +29,39 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
     knownPatterns.add(new Pattern<>(input, outputCls));
   }
 
+  /** 
+   * Select k smallest elements out of a sequence of elements. 
+   * May return a sequence of size less than or equal to k.
+   * This is a sequential operation only, parallel operation not allowed.
+   */
+  public static <T> Stream<T> selectK(Iterator<? extends T> sequence, Comparator<? super T> comparator, int k) {
+    if (k <= 0) return Stream.empty();
+    //I need the LARGEST elements first for this to work
+    final var heap = new PriorityQueue<T>(comparator.reversed());
+    while(sequence.hasNext()) {
+      final T element = sequence.next();
+      if(heap.size() < k) {
+        heap.add(element); continue;
+      }
+      final T root = heap.peek();
+      if(comparator.compare(element, root) >= 0) continue;
+      //If element < root
+      heap.poll(); heap.add(element);
+    }
+    return heap.stream();
+  }
+
   @Override public C predict(Float64Row input) {
-    return knownPatterns.stream()//.unordered().parallel()
+    return /*knownPatterns.stream()//.unordered().parallel()
     .sorted((p1, p2) -> Double.compare(
       distanceFunction.applyAsDouble(p1.input, input),
       distanceFunction.applyAsDouble(p2.input, input)
     ))
-    .limit(K)//.parallel()
+    .limit(K)//.parallel()*/
+    selectK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
+      distanceFunction.applyAsDouble(p1.input, input),
+      distanceFunction.applyAsDouble(p2.input, input)
+    ), K)
     .collect(Collectors.groupingBy/*Concurrent*/(Pattern<C>::outputCls, Collectors.counting()))
     .entrySet().stream()//.unordered().parallel() //(K is assumed to be small)
     .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()))
@@ -43,17 +69,17 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
     .getKey();
   }
 
-  public C predictParallel(Float64Row input) {
-    return knownPatterns.stream()/*.unordered()*/.parallel()
-    .sorted((p1, p2) -> Double.compare(
-      distanceFunction.applyAsDouble(p1.input, input),
-      distanceFunction.applyAsDouble(p2.input, input)
-    ))
-    .limit(K).parallel()
-    .collect(Collectors.groupingByConcurrent(Pattern<C>::outputCls, Collectors.counting()))
-    .entrySet().stream()//.unordered().parallel() //(K is assumed to be small)
-    .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()))
-    .orElseThrow(IllegalStateException::new)
-    .getKey();
-  }
+  // public C predictParallel(Float64Row input) {
+  //   return knownPatterns.parallelStream()/*.unordered()*/.parallel()
+  //   .sorted((p1, p2) -> Double.compare(
+  //     distanceFunction.applyAsDouble(p1.input, input),
+  //     distanceFunction.applyAsDouble(p2.input, input)
+  //   ))
+  //   .limit(K).parallel()
+  //   .collect(Collectors.groupingByConcurrent(Pattern<C>::outputCls, Collectors.counting()))
+  //   .entrySet().stream()//.unordered().parallel() //(K is assumed to be small)
+  //   .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()))
+  //   .orElseThrow(IllegalStateException::new)
+  //   .getKey();
+  // }
 }
