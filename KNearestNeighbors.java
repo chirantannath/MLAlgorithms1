@@ -30,14 +30,28 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
   }
 
   @Override public C predict(Float64Row input) {
-    return knownPatterns.stream().unordered().parallel()
+    return knownPatterns.stream()//.unordered().parallel()
+    .sorted((p1, p2) -> Double.compare(
+      distanceFunction.applyAsDouble(p1.input, input),
+      distanceFunction.applyAsDouble(p2.input, input)
+    ))
+    .limit(K)//.parallel()
+    .collect(Collectors.groupingBy/*Concurrent*/(Pattern<C>::outputCls, Collectors.counting()))
+    .entrySet().stream()//.unordered().parallel() //(K is assumed to be small)
+    .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()))
+    .orElseThrow(IllegalStateException::new)
+    .getKey();
+  }
+
+  public C predictParallel(Float64Row input) {
+    return knownPatterns.stream()/*.unordered()*/.parallel()
     .sorted((p1, p2) -> Double.compare(
       distanceFunction.applyAsDouble(p1.input, input),
       distanceFunction.applyAsDouble(p2.input, input)
     ))
     .limit(K).parallel()
-    .collect(Collectors.groupingByConcurrent(p -> p.outputCls, Collectors.counting()))
-    .entrySet().stream().unordered()//.parallel() //(K is assumed to be small)
+    .collect(Collectors.groupingByConcurrent(Pattern<C>::outputCls, Collectors.counting()))
+    .entrySet().stream()//.unordered().parallel() //(K is assumed to be small)
     .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()))
     .orElseThrow(IllegalStateException::new)
     .getKey();

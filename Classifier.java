@@ -1,4 +1,5 @@
 import java.util.*;
+import java.util.function.*;
 import java.util.stream.*;
 /**
  * Interface for classifiers (predicting discrete output from input).
@@ -18,10 +19,10 @@ public interface Classifier<IR extends Row, OP> {
     for(int i = 0; i < size; i++) 
       fit(inputs.get(i), trueOutputs.get(i));
   }
-  /** Predict for an input. */
+  /** Predict for an input. This NEEDS to be thread-safe. */
   OP predict(IR input);
   /** 
-   * (Lazily) predict for a set of inputs. 
+   * (Lazily) predict for a set of inputs.
    * Default implementation behaves as if
    * <pre>
    * return inputs.map(this::predict);
@@ -35,8 +36,22 @@ public interface Classifier<IR extends Row, OP> {
   default int countCorrect(List<? extends IR> inputs, List<? extends OP> trueOutputs) {
     final int size = inputs.size();
     if(size != trueOutputs.size()) throw new IllegalArgumentException();
-    return (int)IntStream.range(0, size).parallel()
+    return (int)IntStream.range(0, size)//.parallel() (Not parallel by default)
     .filter(i -> Objects.equals(trueOutputs.get(i), predict(inputs.get(i))))
     .count();
+  }
+  default int countCorrectParallel(List<? extends IR> inputs, List<? extends OP> trueOutputs) {
+    final int size = inputs.size();
+    if(size != trueOutputs.size()) throw new IllegalArgumentException();
+    return (int)IntStream.range(0, size).unordered().parallel()
+    .filter(i -> Objects.equals(trueOutputs.get(i), predict(inputs.get(i))))
+    .count();
+  }
+  
+  public static <IR extends Row, OP> Classifier<IR, OP> of(BiConsumer<IR, OP> fitter, Function<IR, OP> predictor) {
+    return new Classifier<IR, OP>() {
+      @Override public void fit(IR input, OP trueOutput) {fitter.accept(input, trueOutput);}
+      @Override public OP predict(IR input) {return predictor.apply(input);}
+    };
   }
 }
