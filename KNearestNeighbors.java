@@ -1,6 +1,6 @@
 import java.util.*;
 import java.util.function.*;
-import java.util.stream.*;
+//import java.util.stream.*;
 
 public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
   /** Combined type to store input-output combination. */
@@ -34,8 +34,8 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
    * May return a sequence of size less than or equal to k.
    * This is a sequential operation only, parallel operation not allowed.
    */
-  public static <T> Stream<T> selectK(Iterator<? extends T> sequence, Comparator<? super T> comparator, int k) {
-    if (k <= 0) return Stream.empty();
+  public static <T> Collection<T> selectK(Iterator<? extends T> sequence, Comparator<? super T> comparator, int k) {
+    if (k <= 0) return Collections.emptyList();
     //I need the LARGEST elements first for this to work
     final var heap = new PriorityQueue<T>(comparator.reversed());
     while(sequence.hasNext()) {
@@ -48,25 +48,37 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
       //If element < root
       heap.poll(); heap.add(element);
     }
-    return heap.stream();
+    assert heap.size() <= k;
+    return Collections.unmodifiableCollection(heap);
   }
 
   @Override public C predict(Float64Row input) {
-    return /*knownPatterns.stream()//.unordered().parallel()
-    .sorted((p1, p2) -> Double.compare(
-      distanceFunction.applyAsDouble(p1.input, input),
-      distanceFunction.applyAsDouble(p2.input, input)
-    ))
-    .limit(K)//.parallel()*/
-    selectK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
-      distanceFunction.applyAsDouble(p1.input, input),
-      distanceFunction.applyAsDouble(p2.input, input)
-    ), K)
-    .collect(Collectors.groupingBy/*Concurrent*/(Pattern<C>::outputCls, Collectors.counting()))
-    .entrySet().stream()//.unordered().parallel() //(K is assumed to be small)
-    .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()))
-    .orElseThrow(IllegalStateException::new)
-    .getKey();
+    // return selectK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
+    //   distanceFunction.applyAsDouble(p1.input, input),
+    //   distanceFunction.applyAsDouble(p2.input, input)
+    // ), K)
+    // .collect(Collectors.groupingBy/*Concurrent*/(Pattern<C>::outputCls, Collectors.counting()))
+    // .entrySet().stream()//.unordered().parallel() //(K is assumed to be small)
+    // .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()))
+    // .orElseThrow(IllegalStateException::new)
+    // .getKey();
+    final var selected = selectK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
+       distanceFunction.applyAsDouble(p1.input, input),
+       distanceFunction.applyAsDouble(p2.input, input)
+    ), K);
+    final var counts = new HashMap<C, Integer>();
+    for(var p : selected) 
+      counts.put(p.outputCls, counts.getOrDefault(p.outputCls, 0) + 1);
+    if(counts.isEmpty()) throw new IllegalStateException("Nothing fitted in");
+    C maxClass = null; int maxClassCount = 0;
+    for(var entry : counts.entrySet()) {
+      final int classCount = entry.getValue();
+      if(classCount > maxClassCount) {
+        maxClass = entry.getKey(); 
+        maxClassCount = classCount;
+      }
+    }
+    return maxClass;
   }
 
   // public C predictParallel(Float64Row input) {

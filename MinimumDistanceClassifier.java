@@ -84,7 +84,7 @@ public class MinimumDistanceClassifier<C> implements Classifier<Float64Row, C> {
   public MinimumDistanceClassifier() {this(Float64Row::distanceEuclidean);}
 
   @Override public void fit(Float64Row input, C outputCls) {
-    classMeans.merge(outputCls, new RowMean(input, 1), (c, mean) -> mean.add(input));
+    classMeans.merge(outputCls, new RowMean(input, 1), (oldMean, initial) -> oldMean.add(input));
   }
 
   @Override public C predict(Float64Row input) {
