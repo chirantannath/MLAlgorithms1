@@ -1,7 +1,24 @@
+import java.util.function.*;
+import java.util.stream.*;
 
 /** 
- * Interface for clustering systems (grouping data).
+ * Interface for clustering systems (grouping data). Groups are always identified
+ * by index (0, 1, 2, ...)
+ * @param <IR> input vector type
+ * @author chirantannath
  */
-public interface Clusterer {
-  
+public interface Clusterer<IR extends Row> extends Function<Supplier<Stream<IR>>, Stream<Stream<IR>>> {
+  /**
+   * Group incoming data represented by a stream of rows. We use a supplier
+   * because the algorithm may need to process data repeatedly, 
+   * which means that the input sequence returned be the same each time
+   * (some algorithms may tolerate unordering changes).
+   * Although the return
+   * type suggests this is a lazily evaluated function, this is not necessary and 
+   * evaluation may happen early (that is, this function may take time by itself,
+   * in which case the output groups, also represented by streams, may be sourced from
+   * {@link java.util.Collection#stream()}, {@link java.util.stream.Stream.Builder#build()}, 
+   * et cetera).
+   */
+  @Override Stream<Stream<IR>> apply(Supplier<Stream<IR>> inputsSupplier);
 }
