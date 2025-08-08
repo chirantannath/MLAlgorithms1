@@ -52,69 +52,50 @@ final class ClassifierTest {
       // original = null; originalTrain = null; originalTest = null;
     }
 
-    System.gc(); System.out.println();
+    System.gc();
+    System.out.println();
 
-    {
-      var classifier = new MinimumDistanceClassifier<Integer>();
+    testClassifier(new MinimumDistanceClassifier<>(), inputTrain, outcomeTrain, inputTest, outcomeTest);
 
-      System.out.println("mindist fitting starting...");
-      long ts = System.currentTimeMillis();
-      classifier.fit(inputTrain, outcomeTrain);
-      ts = System.currentTimeMillis() - ts;
-      System.out.println("Fitting took " + ts + "ms time");
+    System.gc();
+    System.out.println();
 
-      System.out.println("mindist evaluation starting...");
-      final var counter = new java.util.concurrent.atomic.AtomicInteger(0);
-      ts = System.currentTimeMillis();
-      int trainScore = (int) IntStream.range(0, trainSize).unordered().parallel()
-          //.peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), trainSize))
-          .filter(i -> Objects.equals(outcomeTrain.get(i), classifier.predict(inputTrain.get(i))))
-          .count();
-      ts = System.currentTimeMillis() - ts;
-      System.out.printf("Training score: %f%% (%d out of %d); took %dms time\n", trainScore * 100D / trainSize,
-          trainScore, trainSize, ts);
-      counter.set(0);
-      ts = System.currentTimeMillis();
-      int testScore = (int) IntStream.range(0, testSize).unordered().parallel()
-          //.peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), testSize))
-          .filter(i -> Objects.equals(outcomeTest.get(i), classifier.predict(inputTest.get(i))))
-          .count();
-      ts = System.currentTimeMillis() - ts;
-      System.out.printf("Test score: %f%% (%d out of %d); took %dms time\n", testScore * 100D / testSize, testScore,
-          testSize, ts);
-    }
+    testClassifier(new KNearestNeighbors<>(args.length > 2 ? Integer.parseInt(args[2]) : 5), inputTrain, outcomeTrain, inputTest, outcomeTest);
+  }
 
-    System.gc(); System.out.println();
+  static <IR extends Row, OP> void testClassifier(
+      Classifier<IR, OP> classifier,
+      List<? extends IR> inputTrain,
+      List<? extends OP> outcomeTrain,
+      List<? extends IR> inputTest,
+      List<? extends OP> outcomeTest) {
+    final int trainSize = inputTrain.size();
+    final int testSize = inputTest.size();
 
-    {
-      var classifier = new KNearestNeighbors<Integer>(
-          args.length > 2 ? Integer.parseInt(args[2]) : 5);
+    System.out.println(classifier.getClass().getName()+" fitting starting...");
+    long ts = System.currentTimeMillis();
+    classifier.fit(inputTrain.iterator(), outcomeTrain.iterator());
+    ts = System.currentTimeMillis() - ts;
+    System.out.println("Fitting took " + ts + "ms time");
 
-      System.out.println("KNN fitting starting...");
-      long ts = System.currentTimeMillis();
-      classifier.fit(inputTrain, outcomeTrain);
-      ts = System.currentTimeMillis() - ts;
-      System.out.println("Fitting took " + ts + "ms time");
+    System.out.println(classifier.getClass().getName()+" evaluation starting...");
 
-      System.out.println("KNN evaluation starting...");
-      final var counter = new java.util.concurrent.atomic.AtomicInteger(0);
-      ts = System.currentTimeMillis();
-      int trainScore = (int) IntStream.range(0, trainSize).unordered().parallel()
-          //.peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), trainSize))
-          .filter(i -> Objects.equals(outcomeTrain.get(i), classifier.predict(inputTrain.get(i))))
-          .count();
-      ts = System.currentTimeMillis() - ts;
-      System.out.printf("Training score: %f%% (%d out of %d); took %dms time\n", trainScore * 100D / trainSize,
-          trainScore, trainSize, ts);
-      counter.set(0);
-      ts = System.currentTimeMillis();
-      int testScore = (int) IntStream.range(0, testSize).unordered().parallel()
-          //.peek(i -> System.out.printf("%d entries checked out of %d\r", counter.incrementAndGet(), testSize))
-          .filter(i -> Objects.equals(outcomeTest.get(i), classifier.predict(inputTest.get(i))))
-          .count();
-      ts = System.currentTimeMillis() - ts;
-      System.out.printf("Test score: %f%% (%d out of %d); took %dms time\n", testScore * 100D / testSize, testScore,
-          testSize, ts);
-    }
+    ts = System.currentTimeMillis();
+    int trainScore = (int) classifier.countCorrectParallel(
+        IntStream.range(0, trainSize).unordered().parallel()
+            .mapToObj(i -> new Classifier.Pair<IR, OP>(inputTrain.get(i), outcomeTrain.get(i))),
+        null /* cnt -> System.out.printf("%d entries checked out of %d\r", cnt, trainSize) */);
+    ts = System.currentTimeMillis() - ts;
+    System.out.printf("Training score: %f%% (%d out of %d); took %dms time\n", trainScore * 100D / trainSize,
+        trainScore, trainSize, ts);
+
+    ts = System.currentTimeMillis();
+    int testScore = (int) classifier.countCorrectParallel(
+        IntStream.range(0, testSize).unordered().parallel()
+            .mapToObj(i -> new Classifier.Pair<IR, OP>(inputTest.get(i), outcomeTest.get(i))),
+        null /* cnt -> System.out.printf("%d entries checked out of %d\r", cnt, testSize) */);
+    ts = System.currentTimeMillis() - ts;
+    System.out.printf("Test score: %f%% (%d out of %d); took %dms time\n", testScore * 100D / testSize, testScore,
+        testSize, ts);
   }
 }

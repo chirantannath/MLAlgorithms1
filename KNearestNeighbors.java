@@ -3,10 +3,8 @@ import java.util.function.*;
 //import java.util.stream.*;
 
 public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
-  /** Combined type to store input-output combination. */
-  protected static record Pattern<CLS> (Float64Row input, CLS outputCls) {}
   /** Set of patterns collected till now. Usually modifiable and not thread-safe. */
-  protected final List<Pattern<C>> knownPatterns = new ArrayList<>();
+  protected final List<Pair<Float64Row, C>> knownPatterns = new ArrayList<>();
   /** Parameter, number of nearest neighbors selected for prediction */
   public final int K;
   /** 
@@ -26,7 +24,7 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
   }
 
   @Override public void fit(Float64Row input, C outputCls) {
-    knownPatterns.add(new Pattern<>(input, outputCls));
+    knownPatterns.add(new Pair<>(input, outputCls));
   }
 
   /** 
@@ -63,12 +61,12 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
     // .orElseThrow(IllegalStateException::new)
     // .getKey();
     final var selected = selectK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
-       distanceFunction.applyAsDouble(p1.input, input),
-       distanceFunction.applyAsDouble(p2.input, input)
+       distanceFunction.applyAsDouble(p1.input(), input),
+       distanceFunction.applyAsDouble(p2.input(), input)
     ), K);
     final var counts = new HashMap<C, Integer>();
     for(var p : selected) 
-      counts.put(p.outputCls, counts.getOrDefault(p.outputCls, 0) + 1);
+      counts.put(p.output(), counts.getOrDefault(p.output(), 0) + 1);
     if(counts.isEmpty()) throw new IllegalStateException("Nothing fitted in");
     C maxClass = null; int maxClassCount = 0;
     for(var entry : counts.entrySet()) {
