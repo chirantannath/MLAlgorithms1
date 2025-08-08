@@ -9,9 +9,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author chirantannath
  */
 public interface Classifier<IR extends Row, OP> {
-  /** An input-output combination. */
-  public static record Pair<InputType, OutputType>(InputType input, OutputType output) {}
-
   /** 
    * Train (further) on a <i>single</i> input-output combination. 
    * This always changes state of this model so is expected to be called
@@ -19,7 +16,7 @@ public interface Classifier<IR extends Row, OP> {
    */
   void fit(IR input, OP trueOutput);
   /** @see #fit(IR, OP) */
-  default void fit(Pair<? extends IR, ? extends OP> truePair) {fit(truePair.input, truePair.output);}
+  default void fit(Pair<? extends IR, ? extends OP> truePair) {fit(truePair.input(), truePair.output());}
   /** '
    * Train (further) on a set of input-output combinations. 
    */
@@ -72,9 +69,9 @@ public interface Classifier<IR extends Row, OP> {
     long count = 0, correctCount = 0;
     while(truePairs.hasNext()) {
       final var pair = truePairs.next();
-      final var predicted = predict(pair.input);
+      final var predicted = predict(pair.input());
       if(testedCountConsumer != null) testedCountConsumer.accept(++count);
-      if(Objects.equals(pair.output, predicted)) ++correctCount;
+      if(Objects.equals(pair.output(), predicted)) ++correctCount;
     }
     return correctCount;
   }
@@ -87,13 +84,17 @@ public interface Classifier<IR extends Row, OP> {
     final var count = new AtomicLong(0);
     var stream = truePairs.unordered().parallel();
     if(testedCountConsumer != null) stream = stream.peek(pair -> testedCountConsumer.accept(count.incrementAndGet()));
-    return stream.filter(pair -> Objects.equals(pair.output, predict(pair.input))).count();
+    return stream.filter(pair -> Objects.equals(pair.output(), predict(pair.input()))).count();
   }
 
-  public static <IR extends Row, OP> Classifier<IR, OP> of(BiConsumer<IR, OP> fitter, Function<IR, OP> predictor) {
+  public static <IR extends Row, OP> Classifier<IR, OP> of(BiConsumer<? super IR, ? super OP> fitter, Function<? super IR, ? extends OP> predictor) {
     return new Classifier<IR, OP>() {
       @Override public void fit(IR input, OP trueOutput) {fitter.accept(input, trueOutput);}
       @Override public OP predict(IR input) {return predictor.apply(input);}
     };
+  }
+
+  public static <IR extends Row, OP, C extends BiConsumer<? super IR, ? super OP> & Function<? super IR, ? extends OP>> Classifier<IR, OP> of(C classifier) {
+    return of(classifier, classifier);
   }
 }

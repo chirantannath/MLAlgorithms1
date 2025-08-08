@@ -83,7 +83,7 @@ final class ClassifierTest {
     ts = System.currentTimeMillis();
     int trainScore = (int) classifier.countCorrectParallel(
         IntStream.range(0, trainSize).unordered().parallel()
-            .mapToObj(i -> new Classifier.Pair<IR, OP>(inputTrain.get(i), outcomeTrain.get(i))),
+            .mapToObj(i -> new Pair<IR, OP>(inputTrain.get(i), outcomeTrain.get(i))),
         null /* cnt -> System.out.printf("%d entries checked out of %d\r", cnt, trainSize) */);
     ts = System.currentTimeMillis() - ts;
     System.out.printf("Training score: %f%% (%d out of %d); took %dms time\n", trainScore * 100D / trainSize,
@@ -92,7 +92,7 @@ final class ClassifierTest {
     ts = System.currentTimeMillis();
     int testScore = (int) classifier.countCorrectParallel(
         IntStream.range(0, testSize).unordered().parallel()
-            .mapToObj(i -> new Classifier.Pair<IR, OP>(inputTest.get(i), outcomeTest.get(i))),
+            .mapToObj(i -> new Pair<IR, OP>(inputTest.get(i), outcomeTest.get(i))),
         null /* cnt -> System.out.printf("%d entries checked out of %d\r", cnt, testSize) */);
     ts = System.currentTimeMillis() - ts;
     System.out.printf("Test score: %f%% (%d out of %d); took %dms time\n", testScore * 100D / testSize, testScore,
