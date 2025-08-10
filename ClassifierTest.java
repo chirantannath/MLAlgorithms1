@@ -6,7 +6,7 @@ final class ClassifierTest {
   }
 
   public static void main(String args[]) throws Exception {
-    final List<Integer> outcomeTrain, outcomeTest;
+    final List<String> outcomeTrain, outcomeTest;
     final List<Float64Row> inputTrain, inputTest;
     final String[] columnNames;
     final int[] inFeatures;
@@ -20,9 +20,11 @@ final class ClassifierTest {
       System.out.println("Number of rows: " + original.size());
       System.out.println("Columns: " + Arrays.toString(columnNames));
 
-      final Random rng = new Random(0x12012001_12012001L); // my birthday as my seed
+      // My birthday as my seed
+      final Random rng = Arrays.asList(args).contains("rnd") ? new Random() : new Random(0x12012001_12012001L);
       StringDataset originalTrain, originalTest;
       final double splitFraction = args.length > 1 ? Double.parseDouble(args[1]) : 0.75;
+      System.out.printf("Test-train split fraction %g\n", splitFraction);
       {
         final var split = Dataset.split(original, rng, splitFraction).parallel()
             .map(p -> new StringDataset(columnNames, p.parallel()))
@@ -40,9 +42,9 @@ final class ClassifierTest {
       inFeatures = IntStream.range(0, original.getNumColumns() - 1).toArray();
       outFeature = original.getNumColumns() - 1;
       outcomeTrain = originalTrain.columnStream(outFeature).parallel()
-          .map(String::trim).map(Integer::valueOf).collect(Collectors.toUnmodifiableList());
+          .map(String::trim).collect(Collectors.toUnmodifiableList());
       outcomeTest = originalTest.columnStream(outFeature).parallel()
-          .map(String::trim).map(Integer::valueOf).collect(Collectors.toUnmodifiableList());
+          .map(String::trim).collect(Collectors.toUnmodifiableList());
       inputTrain = originalTrain.stream().parallel()
           .map(row -> new Float64Row(row.project(inFeatures)))
           .collect(Collectors.toUnmodifiableList());
@@ -60,7 +62,9 @@ final class ClassifierTest {
     System.gc();
     System.out.println();
 
-    testClassifier(new KNearestNeighbors<>(args.length > 2 ? Integer.parseInt(args[2]) : 5), inputTrain, outcomeTrain, inputTest, outcomeTest);
+    final int K = args.length > 2 ? Integer.parseInt(args[2]) : 5;
+    System.out.println("KNN parameter K: "+K);
+    testClassifier(new KNearestNeighbors<>(K), inputTrain, outcomeTrain, inputTest, outcomeTest);
   }
 
   static <IR extends Row, OP> void testClassifier(
@@ -72,13 +76,13 @@ final class ClassifierTest {
     final int trainSize = inputTrain.size();
     final int testSize = inputTest.size();
 
-    System.out.println(classifier.getClass().getName()+" fitting starting...");
+    System.out.println(classifier.getClass().getName() + " fitting starting...");
     long ts = System.currentTimeMillis();
     classifier.fit(inputTrain.iterator(), outcomeTrain.iterator());
     ts = System.currentTimeMillis() - ts;
     System.out.println("Fitting took " + ts + "ms time");
 
-    System.out.println(classifier.getClass().getName()+" evaluation starting...");
+    System.out.println(classifier.getClass().getName() + " evaluation starting...");
 
     ts = System.currentTimeMillis();
     int trainScore = (int) classifier.countCorrectParallel(

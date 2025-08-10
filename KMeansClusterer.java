@@ -84,9 +84,9 @@ public class KMeansClusterer implements Clusterer<Float64Row> {
       Arrays.fill(newGroupRepresentatives, null);
       {
         final var newGrpMap = IntStream.range(0, data.length).unordered().parallel()
-            .mapToObj(dataIdx -> new Pair<Float64Row, Integer>(data[dataIdx], groupIDs[dataIdx]))
-            .collect(Collectors.groupingByConcurrent(Pair::output,
-                Collectors.mapping(Pair::input, Float64RowStats.meanCollector(rowLength))));
+            .boxed()
+            .collect(Collectors.groupingByConcurrent(dataIdx -> groupIDs[dataIdx],
+                Collectors.mapping(dataIdx -> data[dataIdx], Float64RowStats.meanCollector(rowLength))));
         for (var entry : newGrpMap.entrySet())
           newGroupRepresentatives[entry.getKey()] = entry.getValue();
       }
