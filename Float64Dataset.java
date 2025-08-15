@@ -72,6 +72,24 @@ public final class Float64Dataset extends Dataset<Float64Row> {
       RowTransformer<? super Row, ? extends Float64Row> transformer) {
     transformer.fit(rows.iterator());
     transformer.finishFitting();
+    inplaceTransform(rows, transformer);
+  }
+  public static void inplaceFitAndTransformParallel(List<Float64Row> rows,
+      RowTransformer<? super Row, ? extends Float64Row> transformer) {
+    transformer.fit(rows.iterator());
+    transformer.finishFitting();
+    inplaceTransformParallel(rows, transformer);
+  }
+
+  public static void inplaceTransform(List<Float64Row> rows,
+      RowTransformer<? super Row, ? extends Float64Row> transformer) {
+    final var itr = rows.listIterator();
+    while(itr.hasNext()) {
+      itr.set(transformer.transform(itr.next()));
+    }
+  }
+  public static void inplaceTransformParallel(List<Float64Row> rows,
+      RowTransformer<? super Row, ? extends Float64Row> transformer) {
     IntStream.range(0, rows.size()).unordered().parallel()
         .forEach(idx -> rows.set(idx, transformer.transform(rows.get(idx))));
   }

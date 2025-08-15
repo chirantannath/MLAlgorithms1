@@ -51,10 +51,33 @@ final class ClassifierTest {
             .map(String::trim).collect(Collectors.toUnmodifiableList());
         inputTrain = originalTrain.stream().parallel()
             .map(row -> new Float64Row(row.project(inFeatures)))
-            .collect(Collectors.toUnmodifiableList());
+            .collect(Collectors.toCollection(ArrayList::new));
         inputTest = originalTest.stream().parallel()
             .map(row -> new Float64Row(row.project(inFeatures)))
-            .collect(Collectors.toUnmodifiableList());
+            .collect(Collectors.toCollection(ArrayList::new));
+        
+        System.out.print("Use IQR scaling?[y/n]: ");
+        final boolean useRobust = Character.toLowerCase(sc.nextLine().trim().charAt(0)) == 'y';
+        if(useRobust) {
+          final var robustScaler = new RobustScaler(inFeatures.length);
+          robustScaler.fit(inputTrain.iterator());
+          robustScaler.fit(inputTest.iterator());
+          robustScaler.finishFitting();
+          Float64Dataset.inplaceTransform(inputTrain, robustScaler);
+          Float64Dataset.inplaceTransform(inputTest, robustScaler);
+        }
+
+        System.out.print("Use standardization?[y/n]: ");
+        final boolean useStandardization = Character.toLowerCase(sc.nextLine().trim().charAt(0)) == 'y';
+        if(useStandardization) {
+          final var stdScaler = new StandardScaler(inFeatures.length);
+          stdScaler.fit(inputTrain.iterator());
+          stdScaler.fit(inputTest.iterator());
+          stdScaler.finishFitting();
+          Float64Dataset.inplaceTransform(inputTrain, stdScaler);
+          Float64Dataset.inplaceTransform(inputTest, stdScaler);
+        }
+        
         // original = null; originalTrain = null; originalTest = null;
       }
 

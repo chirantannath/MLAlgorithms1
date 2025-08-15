@@ -8,7 +8,7 @@ import java.util.stream.IntStream;
 public final class StandardScaler implements RowTransformer<Row, Float64Row> {
   /** Initial data points; this is cleared after fitting. */
   private List<Float64Row> data = new ArrayList<>();
-  /** Means and standard deviations; this is filled in after fitting. */
+  // Means and standard deviations; this is filled in after fitting.
   private double[] means = null, standardDeviations = null;
   /** Number of attributes this scaler is prepared for. */
   public final int rowLength;
