@@ -13,58 +13,65 @@ final class ClassifierTest {
     final int outFeature;
     final int trainSize, testSize;
 
-    System.out.println("Reading...");
-    {
-      final var original = StringDataset.readCSV(args.length > 0 ? args[0] : "diabetes.csv");
-      columnNames = original.getColumnNames();
-      System.out.println("Number of rows: " + original.size());
-      System.out.println("Columns: " + Arrays.toString(columnNames));
-
-      // My birthday as my seed
-      final Random rng = Arrays.asList(args).contains("rnd") ? new Random() : new Random(0x12012001_12012001L);
-      StringDataset originalTrain, originalTest;
-      final double splitFraction = args.length > 1 ? Double.parseDouble(args[1]) : 0.75;
-      System.out.printf("Test-train split fraction %g\n", splitFraction);
+    try (final Scanner sc = new Scanner(System.in)) {
       {
-        final var split = Dataset.split(original, rng, splitFraction).parallel()
-            .map(p -> new StringDataset(columnNames, p.parallel()))
+        System.out.print("Enter dataset CSV file: ");
+        final var original = StringDataset.readCSV(sc.nextLine());
+        System.out.println("Reading...");
+        columnNames = original.getColumnNames();
+        System.out.println("Number of rows: " + original.size());
+        System.out.println("Columns: " + Arrays.toString(columnNames));
+
+        System.out.print("Use randomized seed?[y/n]: ");
+        final var useRandomizedSeed = Character.toLowerCase(sc.nextLine().trim().charAt(0)) == 'y';
+        // My birthday as my seed
+        final Random rng = useRandomizedSeed ? new Random() : new Random(0x12012001_12012001L);
+        StringDataset originalTrain, originalTest;
+        System.out.print("Enter split fraction (between 0 to 1): ");
+        final double splitFraction = Double.parseDouble(sc.nextLine().trim());
+        {
+          final var split = Dataset.split(original, rng, splitFraction).parallel()
+              .map(p -> new StringDataset(columnNames, p.parallel()))
+              .collect(Collectors.toUnmodifiableList());
+          assert split.size() == 2;
+          originalTrain = split.get(0);
+          originalTest = split.get(1);
+        }
+        trainSize = originalTrain.size();
+        testSize = originalTest.size();
+        System.out.printf("Training size: %d, Test size: %d\n", trainSize, testSize);
+        assert trainSize + testSize == original.size();
+
+        // Input feature indices
+        inFeatures = IntStream.range(0, original.getNumColumns() - 1).toArray();
+        outFeature = original.getNumColumns() - 1;
+        outcomeTrain = originalTrain.columnStream(outFeature).parallel()
+            .map(String::trim).collect(Collectors.toUnmodifiableList());
+        outcomeTest = originalTest.columnStream(outFeature).parallel()
+            .map(String::trim).collect(Collectors.toUnmodifiableList());
+        inputTrain = originalTrain.stream().parallel()
+            .map(row -> new Float64Row(row.project(inFeatures)))
             .collect(Collectors.toUnmodifiableList());
-        assert split.size() == 2;
-        originalTrain = split.get(0);
-        originalTest = split.get(1);
+        inputTest = originalTest.stream().parallel()
+            .map(row -> new Float64Row(row.project(inFeatures)))
+            .collect(Collectors.toUnmodifiableList());
+        // original = null; originalTrain = null; originalTest = null;
       }
-      trainSize = originalTrain.size();
-      testSize = originalTest.size();
-      System.out.printf("Training size: %d, Test size: %d\n", trainSize, testSize);
-      assert trainSize + testSize == original.size();
 
-      // Input feature indices
-      inFeatures = IntStream.range(0, original.getNumColumns() - 1).toArray();
-      outFeature = original.getNumColumns() - 1;
-      outcomeTrain = originalTrain.columnStream(outFeature).parallel()
-          .map(String::trim).collect(Collectors.toUnmodifiableList());
-      outcomeTest = originalTest.columnStream(outFeature).parallel()
-          .map(String::trim).collect(Collectors.toUnmodifiableList());
-      inputTrain = originalTrain.stream().parallel()
-          .map(row -> new Float64Row(row.project(inFeatures)))
-          .collect(Collectors.toUnmodifiableList());
-      inputTest = originalTest.stream().parallel()
-          .map(row -> new Float64Row(row.project(inFeatures)))
-          .collect(Collectors.toUnmodifiableList());
-      // original = null; originalTrain = null; originalTest = null;
+      System.gc();
+      System.out.println();
+
+      testClassifier(new MinimumDistanceClassifier<>(), inputTrain, outcomeTrain, inputTest, outcomeTest);
+
+      System.gc();
+      System.out.println();
+
+      System.out.print("Enter KNN parameter K: ");
+      final int K = Integer.parseInt(sc.nextLine().trim());
+      System.out.println("KNN parameter K: " + K);
+      testClassifier(new KNearestNeighbors<>(K), inputTrain, outcomeTrain, inputTest, outcomeTest);
+
     }
-
-    System.gc();
-    System.out.println();
-
-    testClassifier(new MinimumDistanceClassifier<>(), inputTrain, outcomeTrain, inputTest, outcomeTest);
-
-    System.gc();
-    System.out.println();
-
-    final int K = args.length > 2 ? Integer.parseInt(args[2]) : 5;
-    System.out.println("KNN parameter K: "+K);
-    testClassifier(new KNearestNeighbors<>(K), inputTrain, outcomeTrain, inputTest, outcomeTest);
   }
 
   static <IR extends Row, OP> void testClassifier(
@@ -79,6 +86,7 @@ final class ClassifierTest {
     System.out.println(classifier.getClass().getName() + " fitting starting...");
     long ts = System.currentTimeMillis();
     classifier.fit(inputTrain.iterator(), outcomeTrain.iterator());
+    classifier.finishFitting();
     ts = System.currentTimeMillis() - ts;
     System.out.println("Fitting took " + ts + "ms time");
 
@@ -90,7 +98,7 @@ final class ClassifierTest {
             .mapToObj(i -> new Pair<IR, OP>(inputTrain.get(i), outcomeTrain.get(i))),
         null /* cnt -> System.out.printf("%d entries checked out of %d\r", cnt, trainSize) */);
     ts = System.currentTimeMillis() - ts;
-    System.out.printf("Training score: %f%% (%d out of %d); took %dms time\n", trainScore * 100D / trainSize,
+    System.out.printf("Training accuracy score: %f%% (%d out of %d); took %dms time\n", trainScore * 100D / trainSize,
         trainScore, trainSize, ts);
 
     ts = System.currentTimeMillis();
@@ -99,7 +107,7 @@ final class ClassifierTest {
             .mapToObj(i -> new Pair<IR, OP>(inputTest.get(i), outcomeTest.get(i))),
         null /* cnt -> System.out.printf("%d entries checked out of %d\r", cnt, testSize) */);
     ts = System.currentTimeMillis() - ts;
-    System.out.printf("Test score: %f%% (%d out of %d); took %dms time\n", testScore * 100D / testSize, testScore,
+    System.out.printf("Test accuracy score: %f%% (%d out of %d); took %dms time\n", testScore * 100D / testSize, testScore,
         testSize, ts);
   }
 }

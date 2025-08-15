@@ -3,7 +3,7 @@ import java.util.stream.*;
 
 /** 
  * Interface for clustering systems (grouping data). Groups are always identified
- * by index (0, 1, 2, ...)
+ * by index (0, 1, 2, ...) OR -1 if no clustering could be done.
  * @param <IR> input vector type
  * @author chirantannath
  */

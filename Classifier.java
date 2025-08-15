@@ -33,6 +33,14 @@ public interface Classifier<IR extends Row, OP> {
     while(truePairs.hasNext())
       fit(truePairs.next());
   }
+  /** 
+   * This is called for final post-processing work after all fitting; 
+   * model should not change state after this method finishes. 
+   * 
+   * <p>The default implementation does nothing.</p>
+   */
+  default void finishFitting() {}
+
   /** Predict for an input. This NEEDS to be thread-safe (not change state of model). */
   OP predict(IR input);
   /** 
