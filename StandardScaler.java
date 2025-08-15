@@ -57,7 +57,7 @@ public final class StandardScaler implements RowTransformer<Row, Float64Row> {
   public Float64Row transform(Row row) {
     final Float64Row result = new Float64Row(row);
     double stddev;
-    for (int col = 0; col <= rowLength; col++) {
+    for (int col = 0; col < rowLength; col++) {
       stddev = standardDeviations[col];
       result.setAsDouble(col, stddev == 0D ? 0D : (result.getAsDouble(col) - means[col]) / stddev);
     }
