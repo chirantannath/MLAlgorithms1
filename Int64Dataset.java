@@ -10,8 +10,11 @@ public final class Int64Dataset extends Dataset<Int64Row>{
   public Int64Dataset(String[] columnNames, Stream<Int64Row> data) {
     super(columnNames, Int64Row.class, data);
   }
-  public Int64Dataset(Dataset<? extends Int64Row> other) {
+  public Int64Dataset(Int64Dataset other) {
     super(other);
+  }
+  public Int64Dataset(Dataset<? extends Row> other) {
+    this(other.getColumnNames(), other.stream().parallel().map(Int64Row::new));
   }
   
   public long get(int row, int column) throws IndexOutOfBoundsException {
@@ -52,8 +55,7 @@ public final class Int64Dataset extends Dataset<Int64Row>{
   public static Int64Dataset readCSV(String path) throws IOException {
     final var dataset = StringDataset.readCSV(path);
     try {
-      final var datastream = dataset.stream().parallel().map(Int64Row::new);
-      return new Int64Dataset(dataset.getColumnNames(), datastream);
+      return new Int64Dataset(dataset);
     } catch (NoSuchElementException | IllegalArgumentException e) {
       throw new IOException(e);
     }

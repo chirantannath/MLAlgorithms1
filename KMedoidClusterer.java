@@ -3,45 +3,18 @@ import java.util.function.*;
 import java.util.stream.*;
 
 /**
- * K-means clustering.
+ * K-medoid clustering.
  * 
  * @author chirantannath
  */
-public class KMeansClusterer implements Clusterer<Float64Row> {
-  /** The number of groups to be output. */
-  public final int K;
-  /**
-   * The distance function to be used, by default
-   * {@link Float64Row#distanceEuclidean(Float64Row)}.
-   */
-  public final ToDoubleBiFunction<Float64Row, Float64Row> distanceFunction;
-  /**
-   * The random number generator source being used; by default
-   * {@link java.util.Random#Random()}.
-   */
-  public final Supplier<Random> randomSource;
-  /**
-   * Maximum number of iterations, by default {@link java.lang.Short#MAX_VALUE} (=
-   * 32767).
-   */
-  public final long maxIterations;
-
-  public KMeansClusterer(int k, ToDoubleBiFunction<Float64Row, Float64Row> distanceFunc, Supplier<Random> rndSrc,
+public final class KMedoidClusterer extends KMeansClusterer {
+  public KMedoidClusterer(int k, ToDoubleBiFunction<Float64Row, Float64Row> distanceFunc, Supplier<Random> rndSrc,
       long maxIter) {
-    if (k <= 0)
-      throw new IllegalArgumentException("K");
-    K = k;
-    Objects.requireNonNull(distanceFunc, "distanceFunction");
-    distanceFunction = distanceFunc;
-    Objects.requireNonNull(rndSrc, "randomSource");
-    randomSource = rndSrc;
-    if (maxIter <= 0)
-      throw new IllegalArgumentException("maxIterations");
-    maxIterations = maxIter;
+    super(k, distanceFunc, rndSrc, maxIter);
   }
 
-  public KMeansClusterer(int k) {
-    this(k, Float64Row::distanceEuclidean, Random::new, Short.MAX_VALUE);
+  public KMedoidClusterer(int k) {
+    super(k);
   }
 
   @Override public Stream<Pair<Float64Row, ClusterLabel<Float64Row>>> apply(Supplier<Stream<Float64Row>> inputsSupplier) {
@@ -89,6 +62,17 @@ public class KMeansClusterer implements Clusterer<Float64Row> {
                 Collectors.mapping(dataIdx -> data[dataIdx], Float64RowStats.meanCollector(rowLength))));
         for (var entry : newGrpMap.entrySet())
           newGroupRepresentatives[entry.getKey()] = entry.getValue();
+      }
+      //In K-medoid, the means are replaced by the patterns closest to the means
+      for(int grp = 0; grp < K; grp++) {
+        final Float64Row grpMean = newGroupRepresentatives[grp];
+        final Float64Row grpMedoid = Arrays.stream(data).unordered().parallel()
+            .min((p1, p2) -> Double.compare(
+              distanceFunction.applyAsDouble(p1, grpMean),
+              distanceFunction.applyAsDouble(p2, grpMean)
+            ))
+            .orElseThrow(IllegalArgumentException::new);
+        newGroupRepresentatives[grp] = grpMedoid;
       }
       if (Arrays.equals(groupRepresentatives, newGroupRepresentatives))
         break;
