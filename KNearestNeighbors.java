@@ -27,31 +27,8 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
     knownPatterns.add(new Pair<>(input, outputCls));
   }
 
-  /** 
-   * Select k smallest elements out of a sequence of elements. 
-   * May return a sequence of size less than or equal to k.
-   * This is a sequential operation only, parallel operation not allowed.
-   */
-  public static <T> Collection<T> selectK(Iterator<? extends T> sequence, Comparator<? super T> comparator, int k) {
-    if (k <= 0) return Collections.emptyList();
-    //I need the LARGEST elements first for this to work
-    final var heap = new PriorityQueue<T>(comparator.reversed());
-    while(sequence.hasNext()) {
-      final T element = sequence.next();
-      if(heap.size() < k) {
-        heap.add(element); continue;
-      }
-      final T root = heap.peek();
-      if(comparator.compare(element, root) >= 0) continue;
-      //If element < root
-      heap.poll(); heap.add(element);
-    }
-    assert heap.size() <= k;
-    return Collections.unmodifiableCollection(heap);
-  }
-
   @Override public C predict(Float64Row input) {
-    final var selected = selectK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
+    final var selected = Utils.selectK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
        distanceFunction.applyAsDouble(p1.input(), input),
        distanceFunction.applyAsDouble(p2.input(), input)
     ), K);
