@@ -212,4 +212,26 @@ final class Utils {
     }
     return l;
   }
+
+  static int[] cumulativeSum(int... array) {
+    final int[] result = Arrays.copyOf(array, array.length);
+    for (int i = 1; i < array.length; i++)
+      result[i] += result[i - 1];
+    return result;
+  }
+
+  static long[] cumulativeSum(long... array) {
+    final long[] result = Arrays.copyOf(array, array.length);
+    for (int i = 1; i < array.length; i++)
+      result[i] += result[i - 1];
+    return result;
+  }
+
+  static double[] cumulativeSum(double... array) {
+    final double[] result = Arrays.copyOf(array, array.length);
+    for (int i = 1; i < array.length; i++)
+      result[i] += result[i - 1];
+    return result;
+  }
+
 }

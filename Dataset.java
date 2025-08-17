@@ -150,6 +150,8 @@ public class Dataset<R extends Row> extends AbstractList<R> implements RandomAcc
       partitionLengths[numPartitions - 1] = totalSize - currentAllocated;
     }
 
+    final int[] cumulativePartitionLengths = Utils.cumulativeSum(partitionLengths);
+
     final int[] indices = IntStream.range(0, totalSize).toArray();
     if (rng != null) {
       // Shuffling algorithm adapated from the default implementation in OpenJDK 17
@@ -165,8 +167,8 @@ public class Dataset<R extends Row> extends AbstractList<R> implements RandomAcc
     // NOT unordered here. If rng is seeded, needs to be deterministic.
     return IntStream.range(0, numPartitions).parallel()
         .mapToObj(partitionIndex -> {
-          final int partitionStart = (partitionIndex == 0) ? 0 : partitionLengths[partitionIndex - 1];
-          final int partitionEnd = partitionStart + partitionLengths[partitionIndex];
+          final int partitionStart = (partitionIndex == 0) ? 0 : cumulativePartitionLengths[partitionIndex - 1];
+          final int partitionEnd = cumulativePartitionLengths[partitionIndex];
           final Stream<R> selected = IntStream.range(partitionStart, partitionEnd).parallel()
               .mapToObj(i -> source.get(indices[i]));
           return selected;
@@ -194,11 +196,13 @@ public class Dataset<R extends Row> extends AbstractList<R> implements RandomAcc
       }
     }
 
+    final int[] cumulativePartitionLengths = Utils.cumulativeSum(partitionLengths);
+
     // No need to shuffle.
     return IntStream.range(0, K).parallel()
         .mapToObj(partitionIndex -> {
-          final int partitionStart = (partitionIndex == 0) ? 0 : partitionLengths[partitionIndex - 1];
-          final int partitionEnd = partitionStart + partitionLengths[partitionIndex];
+          final int partitionStart = (partitionIndex == 0) ? 0 : cumulativePartitionLengths[partitionIndex - 1];
+          final int partitionEnd = cumulativePartitionLengths[partitionIndex];
           final Stream<R> selected = IntStream.range(partitionStart, partitionEnd).parallel()
               .mapToObj(source::get);
           return selected;
@@ -217,14 +221,36 @@ public class Dataset<R extends Row> extends AbstractList<R> implements RandomAcc
     if (K <= 1)
       return;
     Objects.requireNonNull(action, "action");
-    final Stream<R>[] blocks = (Stream<R>[]) kFold(source, K).toArray(Stream<?>[]::new);
+    final Supplier<Stream<R>>[] blocks = (Supplier<Stream<R>>[]) new Supplier<?>[K];
+    {
+      final int totalSize = source.size();
+      final int[] partitionLengths = new int[K];
+      {
+        final int rawPartitionSize = totalSize / K;
+        int elementsLeft = totalSize % K; // Those we couldn't place into blocks directly
+        Arrays.fill(partitionLengths, rawPartitionSize);
+        for (int i = 0; i < K && elementsLeft > 0; i++) {
+          // Distribute among some of the blocks, starting from first.
+          partitionLengths[i]++;
+          elementsLeft--;
+        }
+      }
+      final int[] cumulativePartitionLengths = Utils.cumulativeSum(partitionLengths);
+      assert cumulativePartitionLengths[K - 1] == source.size();
+
+      for (int partitionIndex = 0; partitionIndex < K; partitionIndex++) {
+        final int partitionStart = (partitionIndex == 0) ? 0 : cumulativePartitionLengths[partitionIndex - 1];
+        final int partitionEnd = cumulativePartitionLengths[partitionIndex];
+        blocks[partitionIndex] = () -> IntStream.range(partitionStart, partitionEnd).parallel().mapToObj(source::get);
+      }
+    }
 
     for (int i = 0; i < K; i++) {
       final int current = i;
       final Stream<R> bigBlock = IntStream.range(0, K).parallel()
           .filter(blockIdx -> blockIdx != current)
-          .mapToObj(blockIdx -> blocks[blockIdx].parallel()).flatMap(Function.identity());
-      action.accept(bigBlock, blocks[current]);
+          .mapToObj(blockIdx -> blocks[blockIdx].get().parallel()).flatMap(Function.identity());
+      action.accept(bigBlock, blocks[current].get());
     }
   }
 }
