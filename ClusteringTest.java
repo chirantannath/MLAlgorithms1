@@ -149,9 +149,9 @@ final class ClusteringTest {
     final var intraClusterDist = IntStream.range(0, numGroups)
         .unordered().parallel()
         .mapToDouble(grp -> clusterContents[grp].parallelStream().unordered()
-            .mapToDouble(row -> distanceFunction.applyAsDouble(row, centroids[grp])).sum())
+            .mapToDouble(row -> distanceFunction.applyAsDouble(row, centroids[grp])).average().orElseThrow(AssertionError::new))
         .summaryStatistics();
-    System.out.println("Intra-cluster distance statistics (calculated sum per cluster): " + intraClusterDist);
+    System.out.println("Intra-cluster distance statistics (calculated average per cluster): " + intraClusterDist);
 
     // Centroid inter-cluster distance statistics
     final var interClusterDist = Utils.chooseParallel(2, 0, numGroups)

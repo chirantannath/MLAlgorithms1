@@ -25,7 +25,12 @@ final class ClassifierTest {
         System.out.print("Use randomized seed?[y/n]: ");
         final var useRandomizedSeed = Character.toLowerCase(sc.nextLine().trim().charAt(0)) == 'y';
         // My birthday as my seed
-        final Random rng = useRandomizedSeed ? new Random() : new Random(0x12012001_12012001L);
+        final Random rng;
+        if(useRandomizedSeed) rng = new Random();
+        else {
+          System.out.print("Enter 64-bit signed integer for seed: ");
+          rng = new Random(Long.parseLong(sc.nextLine().trim()));
+        }
         StringDataset originalTrain, originalTest;
         System.out.print("Enter split fraction (between 0 to 1): ");
         final double splitFraction = Double.parseDouble(sc.nextLine().trim());

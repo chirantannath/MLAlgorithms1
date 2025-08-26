@@ -29,7 +29,7 @@ public interface Classifier<IR extends Row, OP> {
     }
   }
   /** @see #fit(Iterator<? extends IR>, Iterator<? extends OP>) */
-  default void fit(Iterator<Pair<? extends IR, ? extends OP>> truePairs) {
+  default void fit(Iterator<? extends Pair<? extends IR, ? extends OP>> truePairs) {
     while(truePairs.hasNext())
       fit(truePairs.next());
   }
@@ -73,7 +73,7 @@ public interface Classifier<IR extends Row, OP> {
     return correctCount;
   }
   /** @see #countCorrect(Iterator, Iterator, LongConsumer)} */
-  default long countCorrect(Iterator<Pair<? extends IR, ? extends OP>> truePairs, LongConsumer testedCountConsumer) {
+  default long countCorrect(Iterator<? extends Pair<? extends IR, ? extends OP>> truePairs, LongConsumer testedCountConsumer) {
     long count = 0, correctCount = 0;
     while(truePairs.hasNext()) {
       final var pair = truePairs.next();
@@ -88,7 +88,7 @@ public interface Classifier<IR extends Row, OP> {
    * This processes in parallel.
    * Put {@code testedCountConsumer = null} if no progress report is desired.
    */
-  default long countCorrectParallel(Stream<Pair<? extends IR, ? extends OP>> truePairs, LongConsumer testedCountConsumer) {
+  default long countCorrectParallel(Stream<? extends Pair<? extends IR, ? extends OP>> truePairs, LongConsumer testedCountConsumer) {
     final var count = new AtomicLong(0);
     var stream = truePairs.unordered().parallel();
     if(testedCountConsumer != null) stream = stream.peek(pair -> testedCountConsumer.accept(count.incrementAndGet()));
