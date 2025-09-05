@@ -9,8 +9,8 @@ import java.util.stream.*;
  * 
  * @author chirantannath
  */
-final class DecisionTree<R extends Row, IntermediateType, ResultType> {
-  abstract sealed class Node permits AttrNode, ResultNode {
+public class DecisionTree<R extends Row, IntermediateType, ResultType> {
+  protected abstract sealed class Node permits AttrNode, ResultNode {
     /** Parent from which this node came from. */
     final Node parent;
     /**
@@ -68,7 +68,7 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
   }
 
   /** Nodes that split on the value of a single attribute. */
-  abstract sealed class AttrNode extends Node permits CategoricalAttrNode, RealAttrNode {
+  protected abstract sealed class AttrNode extends Node permits CategoricalAttrNode, RealAttrNode {
     final int attrIndex;
 
     AttrNode(int attrIndex, Node parent, Predicate<R> branchFilter) {
@@ -87,7 +87,7 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
   }
 
   /** Nodes splitting on categorical (discrete) value attributes. */
-  final class CategoricalAttrNode extends AttrNode {
+  protected final class CategoricalAttrNode extends AttrNode {
     final Map<?, Predicate<R>> categories;
 
     CategoricalAttrNode(int attrIndex, Node parent, Predicate<R> branchFilter, Set<?> attrValues) {
@@ -133,7 +133,7 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
    * Nodes splitting on continuous (real) value attributes. UNIMPLEMENTED AS OF
    * NOW.
    */
-  final class RealAttrNode extends AttrNode {
+  protected final class RealAttrNode extends AttrNode {
 
     RealAttrNode(int attrIndex, Node parent, Predicate<R> branchFilter) {
       super(attrIndex, parent, branchFilter);
@@ -164,7 +164,7 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
     }
   }
 
-  final class ResultNode extends Node {
+  protected final class ResultNode extends Node {
     /** The result stored. May be {@code null} or any other arbitrary object. */
     final ResultType result;
 
@@ -209,24 +209,16 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
     public static Predicate<?>[] EMPTY_PREDICATES = new Predicate<?>[0];
   }
 
-  /** Kind of attributes, how to split on attribute? */
-  static enum AttrKind {
-    /** For categorical values. */
-    CATEGORICAL,
-    /** For continuous values. */
-    CONTINUOUS;
-  }
-
-  private final List<Pair<R, IntermediateType>> rootData = new ArrayList<>();
-  private final AttrKind[] attrKinds;
+  protected final List<Pair<R, IntermediateType>> rootData = new ArrayList<>();
+  protected final AttrKind[] attrKinds;
   public final int depthLimit;
   public final ToDoubleFunction<? super Stream<?>> impurityFunction;
   public final Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer;
 
   /** The decision tree root. */
-  Node treeRoot = null; // Will be assigned later
+  protected Node treeRoot = null; // Will be assigned later
 
-  DecisionTree(AttrKind[] attrKinds, int depthLimit,
+  public DecisionTree(AttrKind[] attrKinds, int depthLimit,
       Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer,
       ToDoubleFunction<? super Stream<?>> impurityFunction) {
     Objects.requireNonNull(attrKinds, "attrKinds");
@@ -240,22 +232,22 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
     this.summarizer = summarizer;
   }
 
-  DecisionTree(AttrKind[] attrKinds, int depthLimit,
+  public DecisionTree(AttrKind[] attrKinds, int depthLimit,
       Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer) {
     this(attrKinds, depthLimit, summarizer, Utils::countedEntropy);
   }
 
-  void addDataPoint(R input, IntermediateType trueOutput) {
-    rootData.add(new Pair<>(input, trueOutput));
+  public void addDataPoint(R input, IntermediateType intermediate) {
+    rootData.add(new Pair<>(input, intermediate));
   }
 
   /** Get a part of the root dataset. */
-  private Stream<Pair<R, IntermediateType>> filteredData(final Predicate<R> filter) {
+  protected final Stream<Pair<R, IntermediateType>> filteredData(final Predicate<R> filter) {
     return rootData.parallelStream().filter(p -> filter.test(p.first()));
   }
 
   /** FOR CATEGORICAL VALUES ONLY, get all value counts from full root dataset. */
-  private Map<?, Long> categoricalValueCounts(int attrIndex) {
+  protected final Map<?, Long> categoricalValueCounts(int attrIndex) {
     Map<?, Long> result;
     if ((result = categoricalValueCountsCache.get(attrIndex)) != null)
       return result;
@@ -264,10 +256,10 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
     return result;
   }
 
-  private final Map<Integer, Map<?, Long>> categoricalValueCountsCache = new HashMap<>();
+  protected final Map<Integer, Map<?, Long>> categoricalValueCountsCache = new HashMap<>();
 
   /** On which attribute should I split this set? */
-  private int findSplittingAttribute(final Predicate<R> setMembership, Iterator<Integer> attributeIndexes) {
+  protected int findSplittingAttribute(final Predicate<R> setMembership, Iterator<Integer> attributeIndexes) {
     final var totalLength = filteredData(setMembership).unordered().count();
     if (totalLength == 0)
       return -1;
@@ -312,19 +304,20 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
    * Build tree given root, current level number and attribute set already
    * selected. Note that {@code attributesSelected} needs to be a modifiable set.
    */
-  private void buildTree(final Node root, final int currentLevel, final Set<Integer> attributesSelected) {
+  protected void buildTree(final Node root, final int currentLevel, final Set<Integer> attributesSelected) {
     if (root == null || root.isChild())
       return;
     final Collection<Integer> attributesToBranch = IntStream.range(0, getRowLength()).boxed()
         .filter(i -> !attributesSelected.contains(i))
         .collect(Collectors.toUnmodifiableSet());
-    if (attributesToBranch.isEmpty())
-      return;
     final var children = new ArrayList<Node>();
     for (final var branch : root.getAllChildBranches()) {
       final var branchDataFilter = branch.and(root::filterFromRoot);
+      //Check if we have at least one data point in this branch
+      if(filteredData(branchDataFilter).unordered().findAny().isEmpty())
+        continue;
       final Node node;
-      if (currentLevel <= depthLimit) { // I can split further from here.
+      if (currentLevel <= depthLimit && !attributesToBranch.isEmpty()) { // I can split further from here.
         final int attrIndex = findSplittingAttribute(branchDataFilter, attributesToBranch.iterator());
         if (attrIndex < 0)
           continue;
@@ -332,12 +325,13 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
           case CONTINUOUS -> throw new UnsupportedOperationException();
           case CATEGORICAL -> new CategoricalAttrNode(attrIndex, root, branch);
         };
-      } else { // Result node calculation.
+      } else { // Result node calculation, either on reaching depth or when no more attributes to branch on
         final var result = summarizer.apply(filteredData(branchDataFilter));
         node = new ResultNode(result, root, branch);
       }
       children.add(node);
     }
+    assert !children.isEmpty();
     root.children = Collections.unmodifiableCollection(children);
 
     // Recursively build tree further.
@@ -350,7 +344,7 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
     }
   }
 
-  void buildTree() {
+  public void buildTree() {
     // Step 1. Find a splitting attribute.
     final int rootAttrIndex = findSplittingAttribute(Utils.constantPredicate(true), null);
     assert rootAttrIndex >= 0;
@@ -363,7 +357,7 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
     buildTree(treeRoot, 1, attributesSelected);
   }
 
-  ResultType predict(final R input) {
+  public ResultType predict(final R input) {
     if (treeRoot == null)
       throw new IllegalStateException();
     Node current = treeRoot;
@@ -378,11 +372,11 @@ final class DecisionTree<R extends Row, IntermediateType, ResultType> {
     }
   }
 
-  int getRowLength() {
+  public int getRowLength() {
     return attrKinds.length;
   }
 
-  AttrKind getAttrKind(int colIndex) {
+  public AttrKind getAttrKind(int colIndex) {
     return attrKinds[colIndex];
   }
 }
