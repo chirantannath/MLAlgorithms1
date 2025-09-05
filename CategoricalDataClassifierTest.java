@@ -91,7 +91,7 @@ final class CategoricalDataClassifierTest {
     System.out.println(classifier.getClass().getName() + " evaluation starting...");
 
     ts = System.currentTimeMillis();
-    int trainScore = (int) classifier.countCorrectParallel(dataTest.parallelStream().unordered(), null);
+    int trainScore = (int) classifier.countCorrectParallel(dataTrain.parallelStream().unordered(), null);
     ts = System.currentTimeMillis() - ts;
     System.out.printf("Training accuracy score: %f%% (%d out of %d); took %dms time\n", trainScore * 100D / trainSize,
         trainScore, trainSize, ts);

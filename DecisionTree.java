@@ -243,7 +243,10 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
 
   /** Get a part of the root dataset. */
   protected final Stream<Pair<R, IntermediateType>> filteredData(final Predicate<R> filter) {
-    return rootData.parallelStream().filter(p -> filter.test(p.first()));
+    return rootData
+      //.stream()
+      .parallelStream() //Currently disabled for debugging
+      .filter(p -> filter.test(p.first()));
   }
 
   /** FOR CATEGORICAL VALUES ONLY, get all value counts from full root dataset. */
@@ -313,8 +316,8 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
     final var children = new ArrayList<Node>();
     for (final var branch : root.getAllChildBranches()) {
       final var branchDataFilter = branch.and(root::filterFromRoot);
-      //Check if we have at least one data point in this branch
-      if(filteredData(branchDataFilter).unordered().findAny().isEmpty())
+      // Check if we have at least one data point in this branch
+      if (filteredData(branchDataFilter).unordered().findAny().isEmpty())
         continue;
       final Node node;
       if (currentLevel <= depthLimit && !attributesToBranch.isEmpty()) { // I can split further from here.
@@ -325,7 +328,8 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
           case CONTINUOUS -> throw new UnsupportedOperationException();
           case CATEGORICAL -> new CategoricalAttrNode(attrIndex, root, branch);
         };
-      } else { // Result node calculation, either on reaching depth or when no more attributes to branch on
+      } else { // Result node calculation, either on reaching depth or when no more attributes
+               // to branch on
         final var result = summarizer.apply(filteredData(branchDataFilter));
         node = new ResultNode(result, root, branch);
       }
@@ -365,8 +369,12 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
       if (current instanceof ResultNode r)
         return r.result;
       assert current != null && !current.isChild();
-      Node newCurrent = current.children.parallelStream().unordered().filter(child -> child.branchFilter.test(input))
-          .findAny().orElseThrow(AssertionError::new);
+      Node newCurrent = current.children
+          .stream() //No need to parallelize here.
+          //.parallelStream()
+          .unordered()
+          .filter(child -> child.branchFilter.test(input))
+          .findAny().orElseThrow(() -> new NoSuchElementException("Unable to predict for "+input));
       assert !Objects.equals(current, newCurrent);
       current = newCurrent;
     }
