@@ -28,13 +28,13 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
   }
 
   @Override public C predict(Float64Row input) {
-    final var selected = Utils.selectK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
-       distanceFunction.applyAsDouble(p1.input(), input),
-       distanceFunction.applyAsDouble(p2.input(), input)
+    final var selected = Utils.selectSmallestK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
+       distanceFunction.applyAsDouble(p1.first(), input),
+       distanceFunction.applyAsDouble(p2.first(), input)
     ), K);
     final var counts = new HashMap<C, Integer>();
     for(var p : selected) 
-      counts.put(p.output(), counts.getOrDefault(p.output(), 0) + 1);
+      counts.put(p.second(), counts.getOrDefault(p.second(), 0) + 1);
     if(counts.isEmpty()) throw new IllegalStateException("Nothing fitted in");
     C maxClass = null; int maxClassCount = 0;
     for(var entry : counts.entrySet()) {

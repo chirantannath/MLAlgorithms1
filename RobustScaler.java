@@ -45,9 +45,9 @@ public final class RobustScaler implements RowTransformer<Row, Float64Row> {
           final double[] colArray = data.parallelStream()
               .mapToDouble(row -> row.getAsDouble(col))
               .parallel().sorted().parallel().toArray();
-          firstQuartiles[col] = firstQuartile(colArray, 0, N);
-          secondQuartiles[col] = median(colArray, 0, N);
-          thirdQuartiles[col] = thirdQuartile(colArray, 0, N);
+          firstQuartiles[col] = Utils.firstQuartile(colArray, 0, N);
+          secondQuartiles[col] = Utils.median(colArray, 0, N);
+          thirdQuartiles[col] = Utils.thirdQuartile(colArray, 0, N);
         });
 
     data = null;
@@ -64,28 +64,5 @@ public final class RobustScaler implements RowTransformer<Row, Float64Row> {
       result.setAsDouble(col, (result.getAsDouble(col) - secondQuartiles[col]) / colSpanRange);
     }
     return result;
-  }
-
-  /** Returns the median, assumes sorted array. */
-  public static double median(double[] array, int startInclusive, int endExclusive) {
-    Objects.checkFromToIndex(startInclusive, endExclusive, array.length);
-    final int N = endExclusive - startInclusive;
-    if (N <= 0)
-      throw new IllegalArgumentException();
-    final int midIdx = startInclusive + (N >>> 1);
-    final double midValue2 = array[midIdx];
-    return (N & 1) == 0 ? Math.scalb(array[midIdx - 1] + midValue2, -1) : midValue2;
-  }
-
-  /** Returns the first quartile, assumes sorted array. */
-  public static double firstQuartile(double[] array, int startInclusive, int endExclusive) {
-    final int N = endExclusive - startInclusive;
-    return N == 1 ? array[startInclusive] : median(array, startInclusive, startInclusive + (N >>> 1));
-  }
-
-  /** Returns the third quartile, assumes sorted array. */
-  public static double thirdQuartile(double[] array, int startInclusive, int endExclusive) {
-    final int N = endExclusive - startInclusive;
-    return N == 1 ? array[startInclusive] : median(array, startInclusive + ((N + 1) >>> 1), endExclusive);
   }
 }

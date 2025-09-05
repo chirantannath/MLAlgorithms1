@@ -78,7 +78,7 @@ final class ClusteringTest {
     // Count and remove those that couldn't be classified.
     final AtomicLong ungroupedCount = new AtomicLong(0L);
     result = result.parallelStream().filter(p -> {
-      final boolean empty = p.output().isEmpty();
+      final boolean empty = p.second().isEmpty();
       if (empty)
         ungroupedCount.incrementAndGet();
       return !empty;
@@ -94,8 +94,8 @@ final class ClusteringTest {
     {
       // Create groups
       Map<ClusterLabel<Float64Row>, List<Float64Row>> groups = result.parallelStream().unordered()
-          .collect(Collectors.groupingByConcurrent(Pair::output,
-              Collectors.mapping(Pair::input, Collectors.toUnmodifiableList())));
+          .collect(Collectors.groupingByConcurrent(Pair::second,
+              Collectors.mapping(Pair::first, Collectors.toUnmodifiableList())));
 
       // Set representative for those that do not have a representative (by mean)
       // And calculate centroids anyway
@@ -140,8 +140,8 @@ final class ClusteringTest {
 
     // Calculate distortion measure
     final var distortionMeasure = result.parallelStream().unordered()
-        .mapToDouble(pair -> distanceFunction.applyAsDouble(pair.input(),
-            pair.output().representative()))
+        .mapToDouble(pair -> distanceFunction.applyAsDouble(pair.first(),
+            pair.second().representative()))
         .summaryStatistics();
     System.out.println("Distortion measure statistics: " + distortionMeasure);
 
