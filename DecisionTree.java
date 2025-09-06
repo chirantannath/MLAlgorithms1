@@ -1,3 +1,4 @@
+import java.io.*;
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
@@ -13,39 +14,49 @@ import java.util.stream.*;
 public class DecisionTree<R extends Row, IntermediateType, ResultType> {
   protected abstract sealed class Node permits AttrNode, ResultNode {
     /** Parent from which this node came from. */
-    final Node parent;
+    public final Node parent;
     /**
      * Filtering condition on which this branch was taken; constant predicate for
      * root nodes.
      */
-    final Predicate<R> branchFilter;
+    public final Predicate<R> branchFilter;
+    /**
+     * A description for the branch taken by {@link #branchFilter}, must never be
+     * null.
+     */
+    public final String branchDescription;
     /** Depth of this node in tree, 0 for root. */
-    final int depth;
+    public final int depth;
     /** Filled in during training. */
-    Collection<? extends Node> children = null;
+    protected Collection<? extends Node> children = null;
 
-    Node(Node parent, Predicate<R> branchFilter) {
+    public Node(Node parent, String branchDescription, Predicate<R> branchFilter) {
       this.parent = parent;
       this.branchFilter = branchFilter == null ? Utils.constantPredicate(true) : branchFilter;
+      this.branchDescription = branchDescription == null ? "" : branchDescription;
       depth = parent == null ? 0 : parent.depth + 1;
     }
 
-    Node(Node parent) {
-      this(parent, null);
+    public Node(Node parent, Predicate<R> branchFilter) {
+      this(parent, null, branchFilter);
     }
 
-    Node() {
+    public Node(Node parent) {
+      this(parent, null, null);
+    }
+
+    public Node() {
       this(null);
     }
 
-    final boolean isRoot() {
+    public final boolean isRoot() {
       return parent == null;
     }
 
-    abstract boolean isChild();
+    public abstract boolean isChild();
 
     /** This function is for use during training. */
-    final boolean filterFromRoot(R row) {
+    public final boolean filterFromRoot(R row) {
       for (Node node = this; node != null; node = node.parent)
         if (!node.branchFilter.test(row))
           return false;
@@ -53,46 +64,65 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
     }
 
     /**
-     * This function is for use during prediction. Must NOT fail in any case (must
-     * return at least one branch), except if this node is a child, in which case
-     * this function MUST RETURN {@code null}.
-     */
-    abstract Predicate<R> getChildBranch(R row);
-
-    /**
      * This function is for use during building the tree. Return all possible child
      * branches (processing may happen here, and the result may be cached by
      * implementations, this is not subject to change). Must always return some
-     * array (even if is is of length 0).
+     * collection (even if it is of length 0). Elements returned are pairs where the
+     * first element is a descriptive string (which may be empty "" but not null).
      */
-    abstract Predicate<R>[] getAllChildBranches();
+    public abstract Collection<Pair<String, Predicate<R>>> getAllChildBranches();
+
+    protected void walkTree(Appendable out) throws IOException {
+      final String prefix;
+      {
+        final var pb = new StringBuilder();
+        for (int i = 0; i < depth; i++)
+          pb.append('\t');
+        prefix = pb.toString();
+      }
+      out.append(String.format("%s-(%s)-%s%s", prefix, branchDescription, toString(), System.lineSeparator()));
+      final var currentChildren = children;
+      if (currentChildren != null)
+        for (var child : currentChildren)
+          child.walkTree(out);
+    }
   }
 
   /** Nodes that split on the value of a single attribute. */
   protected abstract sealed class AttrNode extends Node permits CategoricalAttrNode, RealAttrNode {
-    final int attrIndex;
+    public final int attrIndex;
 
-    AttrNode(int attrIndex, Node parent, Predicate<R> branchFilter) {
-      super(parent, branchFilter);
+    public AttrNode(int attrIndex, Node parent, String branchDescription, Predicate<R> branchFilter) {
+      super(parent, branchDescription, branchFilter);
       Objects.checkIndex(attrIndex, getRowLength());
       this.attrIndex = attrIndex;
     }
 
-    AttrNode(int attrIndex, Node parent) {
+    public AttrNode(int attrIndex, Node parent, Predicate<R> branchFilter) {
+      this(attrIndex, parent, null, branchFilter);
+    }
+
+    public AttrNode(int attrIndex, Node parent) {
       this(attrIndex, parent, null);
     }
 
-    AttrNode(int attrIndex) {
+    public AttrNode(int attrIndex) {
       this(attrIndex, null);
+    }
+
+    @Override
+    public String toString() {
+      return getColumnName(attrIndex);
     }
   }
 
   /** Nodes splitting on categorical (discrete) value attributes. */
   protected final class CategoricalAttrNode extends AttrNode {
-    final Map<?, Predicate<R>> categories;
+    protected final Map<?, Predicate<R>> categories;
 
-    CategoricalAttrNode(int attrIndex, Node parent, Predicate<R> branchFilter, Set<?> attrValues) {
-      super(attrIndex, parent, branchFilter);
+    public CategoricalAttrNode(int attrIndex, Node parent, String branchDescription, Predicate<R> branchFilter,
+        Set<?> attrValues) {
+      super(attrIndex, parent, branchDescription, branchFilter);
       Objects.requireNonNull(attrValues, "attrValues");
       final Map<Object, Predicate<R>> branches = new HashMap<>();
       for (final var value : attrValues)
@@ -100,33 +130,32 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
       categories = Collections.unmodifiableMap(branches);
     }
 
-    CategoricalAttrNode(int attrIndex, Node parent, Predicate<R> branchFilter) {
-      this(attrIndex, parent, branchFilter,
+    public CategoricalAttrNode(int attrIndex, Node parent, String branchDescription, Predicate<R> branchFilter) {
+      this(attrIndex, parent, branchDescription, branchFilter,
           categoricalValueCounts(attrIndex).keySet());
     }
 
-    CategoricalAttrNode(int attrIndex, Node parent) {
+    public CategoricalAttrNode(int attrIndex, Node parent, Predicate<R> branchFilter) {
+      this(attrIndex, parent, null, branchFilter);
+    }
+
+    public CategoricalAttrNode(int attrIndex, Node parent) {
       this(attrIndex, parent, null);
     }
 
-    CategoricalAttrNode(int attrIndex) {
+    public CategoricalAttrNode(int attrIndex) {
       this(attrIndex, null);
     }
 
     @Override
-    boolean isChild() {
+    public boolean isChild() {
       return false;
     }
 
     @Override
-    Predicate<R> getChildBranch(R row) {
-      return categories.get(row.get(attrIndex));
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    Predicate<R>[] getAllChildBranches() {
-      return categories.values().toArray((Predicate<R>[]) new Predicate<?>[categories.size()]);
+    public Collection<Pair<String, Predicate<R>>> getAllChildBranches() {
+      return categories.entrySet().stream().map(e -> new Pair<>(e.getKey().toString(), e.getValue()))
+          .collect(Collectors.toUnmodifiableList());
     }
   }
 
@@ -136,84 +165,77 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
    */
   protected final class RealAttrNode extends AttrNode {
 
-    RealAttrNode(int attrIndex, Node parent, Predicate<R> branchFilter) {
-      super(attrIndex, parent, branchFilter);
+    public RealAttrNode(int attrIndex, Node parent, String branchDescription, Predicate<R> branchFilter) {
+      super(attrIndex, parent, branchDescription, branchFilter);
     }
 
-    RealAttrNode(int attrIndex, Node parent) {
+    public RealAttrNode(int attrIndex, Node parent) {
       super(attrIndex, parent);
     }
 
-    RealAttrNode(int attrIndex) {
+    public RealAttrNode(int attrIndex) {
       super(attrIndex);
     }
 
     @Override
-    boolean isChild() {
+    public boolean isChild() {
       return false;
     }
 
     @Override
-    Predicate<R> getChildBranch(R row) {
-      // TODO Auto-generated method stub
-      throw new UnsupportedOperationException("Unimplemented method 'getChildBranch'");
-    }
-
-    @Override
-    Predicate<R>[] getAllChildBranches() {
+    public Collection<Pair<String, Predicate<R>>> getAllChildBranches() {
       throw new UnsupportedOperationException();
     }
   }
 
   protected final class ResultNode extends Node {
     /** The result stored. May be {@code null} or any other arbitrary object. */
-    final ResultType result;
+    public final ResultType result;
 
-    ResultNode(ResultType result, Node parent, Predicate<R> branchFilter) {
-      super(parent, branchFilter);
+    public ResultNode(ResultType result, Node parent, String branchDescription, Predicate<R> branchFilter) {
+      super(parent, branchDescription, branchFilter);
       this.result = result;
     }
 
-    ResultNode(ResultType result, Node parent) {
-      this(result, parent, null);
+    public ResultNode(ResultType result, Node parent) {
+      this(result, parent, null, null);
     }
 
-    ResultNode(ResultType result) {
+    public ResultNode(ResultType result) {
       this(result, null);
     }
 
-    ResultNode() {
-      this(null, null, null);
+    public ResultNode() {
+      this(null, null, null, null);
     }
 
     /** Creates an empty "stop" node. */
-    ResultNode(Node parent) {
-      this(null, parent, null);
+    public ResultNode(Node parent) {
+      this(null, parent, null, null);
     }
 
     @Override
-    boolean isChild() {
+    public boolean isChild() {
       return true;
     }
 
     @Override
-    Predicate<R> getChildBranch(R row) {
-      return null;
+    public Collection<Pair<String, Predicate<R>>> getAllChildBranches() {
+      return Collections.emptySet();
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    Predicate<R>[] getAllChildBranches() {
-      return (Predicate<R>[]) EMPTY_PREDICATES;
+    public String toString() {
+      return Objects.toString(result);
     }
-
-    public static Predicate<?>[] EMPTY_PREDICATES = new Predicate<?>[0];
   }
 
   /** All the known data for which to build tree. */
   protected final List<Pair<R, IntermediateType>> rootData = new ArrayList<>();
   /** Attribute types of the rows. */
   protected final AttrKind[] attrKinds;
+  /** Column names, may simply be index numbers if not specified. */
+  protected String[] columnNames;
   /** Depth limit to which the tree must be built. */
   public final int depthLimit;
   /**
@@ -230,18 +252,28 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
   /** The decision tree root. */
   protected Node treeRoot = null; // Will be assigned later
 
-  public DecisionTree(AttrKind[] attrKinds, int depthLimit,
+  public DecisionTree(AttrKind[] attrKinds, String[] columnNames, int depthLimit,
       Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer,
       ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
     Objects.requireNonNull(attrKinds, "attrKinds");
     Objects.requireNonNull(impurityFunction, "impurityFunction");
     Objects.requireNonNull(summarizer, "summarizer");
     this.attrKinds = Arrays.copyOf(attrKinds, attrKinds.length);
+    if (columnNames == null) columnNames = new String[0];
+    this.columnNames = new String[attrKinds.length];
+    for(int i = 0; i < attrKinds.length; i++)
+      this.columnNames[i] = i < columnNames.length ? columnNames[i] : String.valueOf(i);
     if (depthLimit <= 0)
       throw new IllegalArgumentException("depthLimit");
     this.depthLimit = depthLimit;
     this.impurityFunction = impurityFunction;
     this.summarizer = summarizer;
+  }
+
+  public DecisionTree(AttrKind[] attrKinds, int depthLimit,
+      Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer,
+      ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
+    this(attrKinds, null, depthLimit, summarizer, impurityFunction);
   }
 
   public DecisionTree(AttrKind[] attrKinds, int depthLimit,
@@ -299,8 +331,9 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
               .valueCounts(filteredData(setMembership).map(p -> p.first().get(attrIndex)).unordered());
           for (final var avcount : attrValueCounts.entrySet())
             attrImpurity += impurityFunction
-                .applyAsDouble(Utils.valueCounts(filteredData(setMembership.and(r -> Objects.equals(r.get(attrIndex), avcount.getKey())))
-                    .unordered().map(Pair::second)))
+                .applyAsDouble(Utils.valueCounts(
+                    filteredData(setMembership.and(r -> Objects.equals(r.get(attrIndex), avcount.getKey())))
+                        .unordered().map(Pair::second)))
                 * avcount.getValue() / totalLength;
           // break; Not required in rule switch
         }
@@ -319,31 +352,34 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
    * Build tree given root, current level number and attribute set already
    * selected. Note that {@code attributesSelected} needs to be a modifiable set.
    */
-  protected void buildTree(final Node root, final int currentLevel, final Set<Integer> attributesSelected) {
+  protected void buildTree(final Node root, final Set<Integer> attributesSelected) {
     if (root == null || root.isChild())
       return;
     final Collection<Integer> attributesToBranch = IntStream.range(0, getRowLength()).boxed()
         .filter(i -> !attributesSelected.contains(i))
         .collect(Collectors.toUnmodifiableSet());
     final var children = new ArrayList<Node>();
-    for (final var branch : root.getAllChildBranches()) {
+    final int childDepth = root.depth + 1;
+    for (final var branchPair : root.getAllChildBranches()) {
+      final String branchDescription = branchPair.first();
+      final var branch = branchPair.second();
       final var branchDataFilter = branch.and(root::filterFromRoot);
       // Check if we have at least one data point in this branch
       if (filteredData(branchDataFilter).unordered().findAny().isEmpty())
         continue;
       final Node node;
-      if (currentLevel <= depthLimit && !attributesToBranch.isEmpty()) { // I can split further from here.
+      if (childDepth < depthLimit && !attributesToBranch.isEmpty()) { // I can split further from here.
         final int attrIndex = findSplittingAttribute(branchDataFilter, attributesToBranch.iterator());
         if (attrIndex < 0)
           continue;
         node = switch (attrKinds[attrIndex]) {
           case CONTINUOUS -> throw new UnsupportedOperationException();
-          case CATEGORICAL -> new CategoricalAttrNode(attrIndex, root, branch);
+          case CATEGORICAL -> new CategoricalAttrNode(attrIndex, root, branchDescription, branch);
         };
       } else { // Result node calculation, either on reaching depth or when no more attributes
                // to branch on
         final var result = summarizer.apply(filteredData(branchDataFilter));
-        node = new ResultNode(result, root, branch);
+        node = new ResultNode(result, root, branchDescription, branch);
       }
       children.add(node);
     }
@@ -354,7 +390,7 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
     for (final Node child : children) {
       if (child instanceof AttrNode attrNode) {
         attributesSelected.add(attrNode.attrIndex);
-        buildTree(attrNode, currentLevel + 1, attributesSelected);
+        buildTree(attrNode, attributesSelected);
         attributesSelected.remove(attrNode.attrIndex);
       }
     }
@@ -368,9 +404,9 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
       case CONTINUOUS -> throw new UnsupportedOperationException();
       case CATEGORICAL -> new CategoricalAttrNode(rootAttrIndex);
     };
-    final var attributesSelected = new Utils.WholeNumbersSet();
+    final var attributesSelected = new HashSet<Integer>();
     attributesSelected.add(rootAttrIndex);
-    buildTree(treeRoot, 1, attributesSelected);
+    buildTree(treeRoot, attributesSelected);
   }
 
   public ResultType predict(final R input) {
@@ -398,5 +434,13 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
 
   public AttrKind getAttrKind(int colIndex) {
     return attrKinds[colIndex];
+  }
+
+  public String getColumnName(int colIndex) {
+    return columnNames[colIndex];
+  }
+
+  public void walkTree(Appendable out) throws IOException {
+    if(treeRoot != null) treeRoot.walkTree(out);
   }
 }

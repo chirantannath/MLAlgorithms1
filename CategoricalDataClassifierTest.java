@@ -67,9 +67,13 @@ final class CategoricalDataClassifierTest {
         final int depthLimit = Integer.parseInt(sc.nextLine().trim());
 
         final var attrKinds = Arrays.stream(inFeatures).mapToObj(i -> AttrKind.CATEGORICAL).toArray(AttrKind[]::new);
-        final var dtree = new DecisionTreeClassifier<StringRow, String>(attrKinds, depthLimit);
+        final var dtree = new DecisionTreeClassifier<StringRow, String>(attrKinds, columnNames, depthLimit,
+            m -> Utils.countedEntropy(m.values().stream().unordered()));
 
         testClassifier(dtree, dataTrain, dataTest);
+
+        System.out.println("\nTree structure:");
+        dtree.walkTree(System.out);
       }
     }
   }

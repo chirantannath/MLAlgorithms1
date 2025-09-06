@@ -1,3 +1,4 @@
+import java.io.*;
 import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
@@ -6,15 +7,20 @@ public class DecisionTreeClassifier<R extends Row, C> implements Classifier<R, C
   /** Actual decision tree. */
   protected final DecisionTree<R, C, C> dtree;
 
-  protected DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit,
+  protected DecisionTreeClassifier(AttrKind[] attrKinds, String[] columnNames, int depthLimit,
       ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction,
       Function<? super Stream<Pair<R, C>>, ? extends C> summarizer) {
-    dtree = new DecisionTree<>(attrKinds, depthLimit, summarizer, impurityFunction);
+    dtree = new DecisionTree<>(attrKinds, columnNames, depthLimit, summarizer, impurityFunction);
+  }
+
+  public DecisionTreeClassifier(AttrKind[] attrKinds, String[] columnNames, int depthLimit,
+      ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
+    this(attrKinds, columnNames, depthLimit, impurityFunction, DecisionTreeClassifier::summarizeResult);
   }
 
   public DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit,
       ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
-    this(attrKinds, depthLimit, impurityFunction, DecisionTreeClassifier::summarizeResult);
+    this(attrKinds, null, depthLimit, impurityFunction, DecisionTreeClassifier::summarizeResult);
   }
 
   public DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit) {
@@ -41,6 +47,10 @@ public class DecisionTreeClassifier<R extends Row, C> implements Classifier<R, C
     return dtree.impurityFunction;
   }
 
+  public void walkTree(Appendable out) throws IOException {
+    dtree.walkTree(out);
+  }
+
   @Override
   public void fit(R input, C trueOutput) {
     dtree.addDataPoint(input, trueOutput);
@@ -57,9 +67,12 @@ public class DecisionTreeClassifier<R extends Row, C> implements Classifier<R, C
   }
 
   /** Result summary when we reach the end of a branch. */
-  private static <RType extends Row, Cls> Cls summarizeResult(Stream<Pair<RType, Cls>> branchData) {
+  public static <RType extends Row, Cls> Cls summarizeResult(Stream<Pair<RType, Cls>> branchData) {
     return Utils.valueCounts(branchData.unordered().parallel().map(Pair::second))
-        .entrySet().parallelStream().unordered()
+        .entrySet()
+        .stream()
+        //.parallelStream() //No real benefit to parallelize here
+        .unordered()
         .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()))
         .orElseThrow(AssertionError::new).getKey();
   }
