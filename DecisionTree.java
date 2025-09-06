@@ -9,6 +9,7 @@ import java.util.stream.*;
  * 
  * @author chirantannath
  */
+@SuppressWarnings("unused")
 public class DecisionTree<R extends Row, IntermediateType, ResultType> {
   protected abstract sealed class Node permits AttrNode, ResultNode {
     /** Parent from which this node came from. */
@@ -209,10 +210,21 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
     public static Predicate<?>[] EMPTY_PREDICATES = new Predicate<?>[0];
   }
 
+  /** All the known data for which to build tree. */
   protected final List<Pair<R, IntermediateType>> rootData = new ArrayList<>();
+  /** Attribute types of the rows. */
   protected final AttrKind[] attrKinds;
+  /** Depth limit to which the tree must be built. */
   public final int depthLimit;
-  public final ToDoubleFunction<? super Stream<?>> impurityFunction;
+  /**
+   * Impurity function that measures the <i>lack</i> of information from a set of
+   * (arbitrary) keys to weights.
+   */
+  public final ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction;
+  /**
+   * Summarizer function that will reduce/summarize a subset of known data points
+   * into a single result.
+   */
   public final Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer;
 
   /** The decision tree root. */
@@ -220,7 +232,7 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
 
   public DecisionTree(AttrKind[] attrKinds, int depthLimit,
       Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer,
-      ToDoubleFunction<? super Stream<?>> impurityFunction) {
+      ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
     Objects.requireNonNull(attrKinds, "attrKinds");
     Objects.requireNonNull(impurityFunction, "impurityFunction");
     Objects.requireNonNull(summarizer, "summarizer");
@@ -234,7 +246,7 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
 
   public DecisionTree(AttrKind[] attrKinds, int depthLimit,
       Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer) {
-    this(attrKinds, depthLimit, summarizer, Utils::countedEntropy);
+    this(attrKinds, depthLimit, summarizer, m -> Utils.countedEntropy(m.values().parallelStream().unordered()));
   }
 
   public void addDataPoint(R input, IntermediateType intermediate) {
@@ -244,9 +256,9 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
   /** Get a part of the root dataset. */
   protected final Stream<Pair<R, IntermediateType>> filteredData(final Predicate<R> filter) {
     return rootData
-      //.stream()
-      .parallelStream() //Currently disabled for debugging
-      .filter(p -> filter.test(p.first()));
+        // .stream()
+        .parallelStream() // Currently disabled for debugging
+        .filter(p -> filter.test(p.first()));
   }
 
   /** FOR CATEGORICAL VALUES ONLY, get all value counts from full root dataset. */
@@ -268,7 +280,7 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
       return -1;
     final double rootImpurity = impurityFunction
         .applyAsDouble(
-            filteredData(setMembership).unordered().map(Pair::second));
+            Utils.valueCounts(filteredData(setMembership).unordered().map(Pair::second)));
 
     if (attributeIndexes == null)
       attributeIndexes = IntStream.range(0, getRowLength()).boxed().iterator();
@@ -283,13 +295,13 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
             "continuous values unsupported as of now (at index " + attrIndex + ")");
         case CATEGORICAL -> {
           // Split on attribute
-          final var valueCounts = Utils
+          final var attrValueCounts = Utils
               .valueCounts(filteredData(setMembership).map(p -> p.first().get(attrIndex)).unordered());
-          for (final var vcount : valueCounts.entrySet())
+          for (final var avcount : attrValueCounts.entrySet())
             attrImpurity += impurityFunction
-                .applyAsDouble(filteredData(setMembership.and(r -> Objects.equals(r.get(attrIndex), vcount.getKey())))
-                    .unordered().map(Pair::second))
-                * vcount.getValue() / totalLength;
+                .applyAsDouble(Utils.valueCounts(filteredData(setMembership.and(r -> Objects.equals(r.get(attrIndex), avcount.getKey())))
+                    .unordered().map(Pair::second)))
+                * avcount.getValue() / totalLength;
           // break; Not required in rule switch
         }
       }
@@ -370,11 +382,11 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
         return r.result;
       assert current != null && !current.isChild();
       Node newCurrent = current.children
-          .stream() //No need to parallelize here.
-          //.parallelStream()
+          .stream() // No need to parallelize here.
+          // .parallelStream()
           .unordered()
           .filter(child -> child.branchFilter.test(input))
-          .findAny().orElseThrow(() -> new NoSuchElementException("Unable to predict for "+input));
+          .findAny().orElseThrow(() -> new NoSuchElementException("Unable to predict for " + input));
       assert !Objects.equals(current, newCurrent);
       current = newCurrent;
     }

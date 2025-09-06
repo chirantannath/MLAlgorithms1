@@ -1,3 +1,4 @@
+import java.util.*;
 import java.util.function.*;
 import java.util.stream.*;
 
@@ -6,18 +7,18 @@ public class DecisionTreeClassifier<R extends Row, C> implements Classifier<R, C
   protected final DecisionTree<R, C, C> dtree;
 
   protected DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit,
-      ToDoubleFunction<? super Stream<?>> impurityFunction,
+      ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction,
       Function<? super Stream<Pair<R, C>>, ? extends C> summarizer) {
     dtree = new DecisionTree<>(attrKinds, depthLimit, summarizer, impurityFunction);
   }
 
   public DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit,
-      ToDoubleFunction<? super Stream<?>> impurityFunction) {
+      ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
     this(attrKinds, depthLimit, impurityFunction, DecisionTreeClassifier::summarizeResult);
   }
 
   public DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit) {
-    this(attrKinds, depthLimit, Utils::countedEntropy);
+    dtree = new DecisionTree<>(attrKinds, depthLimit, DecisionTreeClassifier::summarizeResult);
   }
 
   public DecisionTreeClassifier(AttrKind[] attrKinds) {
@@ -36,7 +37,7 @@ public class DecisionTreeClassifier<R extends Row, C> implements Classifier<R, C
     return dtree.depthLimit;
   }
 
-  public ToDoubleFunction<? super Stream<?>> impurityFunction() {
+  public ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction() {
     return dtree.impurityFunction;
   }
 
