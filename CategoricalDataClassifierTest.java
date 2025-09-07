@@ -68,6 +68,7 @@ final class CategoricalDataClassifierTest {
 
         final var attrKinds = Arrays.stream(inFeatures).mapToObj(i -> AttrKind.CATEGORICAL).toArray(AttrKind[]::new);
         final var dtree = new DecisionTreeClassifier<StringRow, String>(attrKinds, columnNames, depthLimit,
+            16, // No actual real value data so use a sane default
             m -> Utils.countedEntropy(m.values().stream().unordered()));
 
         testClassifier(dtree, dataTrain, dataTest);

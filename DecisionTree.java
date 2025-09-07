@@ -164,17 +164,36 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
    * NOW.
    */
   protected final class RealAttrNode extends AttrNode {
+    protected Float64Interval[] bins;
+
+    public RealAttrNode(int attrIndex, Node parent, String branchDescription, Predicate<R> branchFilter, double min,
+        double max) {
+      this(attrIndex, parent, branchDescription, branchFilter, new Float64Interval(min, max));
+    }
+
+    public RealAttrNode(int attrIndex, Node parent, String branchDescription, Predicate<R> branchFilter,
+        DoubleSummaryStatistics stats) {
+      this(attrIndex, parent, branchDescription, branchFilter, stats.getMin(), stats.getMax());
+    }
+
+    public RealAttrNode(int attrIndex, Node parent, String branchDescription, Predicate<R> branchFilter,
+        Float64Interval interval) {
+      super(attrIndex, parent, branchDescription, branchFilter);
+      bins = interval.split(realAttributeSplits);
+    }
 
     public RealAttrNode(int attrIndex, Node parent, String branchDescription, Predicate<R> branchFilter) {
-      super(attrIndex, parent, branchDescription, branchFilter);
+      this(attrIndex, parent, branchDescription, branchFilter,
+          rootData.parallelStream().unordered()
+              .mapToDouble(p -> p.first().getAsNumber(attrIndex).orElseThrow().doubleValue()).summaryStatistics());
     }
 
     public RealAttrNode(int attrIndex, Node parent) {
-      super(attrIndex, parent);
+      this(attrIndex, parent, null, null);
     }
 
     public RealAttrNode(int attrIndex) {
-      super(attrIndex);
+      this(attrIndex, null);
     }
 
     @Override
@@ -184,7 +203,10 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
 
     @Override
     public Collection<Pair<String, Predicate<R>>> getAllChildBranches() {
-      throw new UnsupportedOperationException();
+      return Arrays.stream(bins)
+          .map(b -> new Pair<String, Predicate<R>>(String.format("[%f,%f]", b.lowerBound(), b.higherBound()),
+              r -> b.testForOptional(r.getAsNumber(attrIndex))))
+          .collect(Collectors.toUnmodifiableList());
     }
   }
 
@@ -238,6 +260,10 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
   protected String[] columnNames;
   /** Depth limit to which the tree must be built. */
   public final int depthLimit;
+  /** Number of splits/bins to be done for real value attributes. */
+  public final int realAttributeSplits;
+  /** Minimum number of samples to use for splitting a node (except the root). */
+  public final int minSamplesToSplit;
   /**
    * Impurity function that measures the <i>lack</i> of information from a set of
    * (arbitrary) keys to weights.
@@ -252,33 +278,40 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
   /** The decision tree root. */
   protected Node treeRoot = null; // Will be assigned later
 
-  public DecisionTree(AttrKind[] attrKinds, String[] columnNames, int depthLimit,
+  public DecisionTree(AttrKind[] attrKinds, String[] columnNames, int depthLimit, int realAttributeSplits,
+      int minSamplesToSplit,
       Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer,
       ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
     Objects.requireNonNull(attrKinds, "attrKinds");
     Objects.requireNonNull(impurityFunction, "impurityFunction");
     Objects.requireNonNull(summarizer, "summarizer");
     this.attrKinds = Arrays.copyOf(attrKinds, attrKinds.length);
-    if (columnNames == null) columnNames = new String[0];
+    if (columnNames == null)
+      columnNames = new String[0];
     this.columnNames = new String[attrKinds.length];
-    for(int i = 0; i < attrKinds.length; i++)
+    for (int i = 0; i < attrKinds.length; i++)
       this.columnNames[i] = i < columnNames.length ? columnNames[i] : String.valueOf(i);
     if (depthLimit <= 0)
       throw new IllegalArgumentException("depthLimit");
+    if (realAttributeSplits < 3)
+      throw new IllegalArgumentException("realAttributeSplits");
     this.depthLimit = depthLimit;
+    this.realAttributeSplits = realAttributeSplits;
+    this.minSamplesToSplit = Math.max(1, minSamplesToSplit);
     this.impurityFunction = impurityFunction;
     this.summarizer = summarizer;
   }
 
-  public DecisionTree(AttrKind[] attrKinds, int depthLimit,
+  public DecisionTree(AttrKind[] attrKinds, int depthLimit, int realAttributeSplits,
       Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer,
       ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
-    this(attrKinds, null, depthLimit, summarizer, impurityFunction);
+    this(attrKinds, null, depthLimit, realAttributeSplits, 1, summarizer, impurityFunction);
   }
 
-  public DecisionTree(AttrKind[] attrKinds, int depthLimit,
+  public DecisionTree(AttrKind[] attrKinds, int depthLimit, int realAttributeSplits,
       Function<? super Stream<Pair<R, IntermediateType>>, ? extends ResultType> summarizer) {
-    this(attrKinds, depthLimit, summarizer, m -> Utils.countedEntropy(m.values().parallelStream().unordered()));
+    this(attrKinds, depthLimit, realAttributeSplits, summarizer,
+        m -> Utils.countedEntropy(m.values().parallelStream().unordered()));
   }
 
   public void addDataPoint(R input, IntermediateType intermediate) {
@@ -323,8 +356,24 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
       final int attrIndex = attributeIndexes.next();
       double attrImpurity = 0;
       switch (attrKinds[attrIndex]) {
-        case CONTINUOUS -> throw new UnsupportedOperationException(
-            "continuous values unsupported as of now (at index " + attrIndex + ")");
+        case CONTINUOUS -> {
+          final var stats = filteredData(setMembership).unordered()
+              .mapToDouble(p -> p.first().getAsNumber(attrIndex)
+                  .orElseThrow(() -> new IllegalArgumentException("Expected number")).doubleValue())
+              .summaryStatistics();
+          final var bins = new Float64Interval(stats.getMin(), stats.getMax()).split(realAttributeSplits);
+          final var attrValueCounts = Utils.valueCounts(
+              filteredData(setMembership).map(
+                  p -> Arrays.stream(bins)
+                      .filter(b -> b.testForOptional(p.first().getAsNumber(attrIndex)))
+                      .findAny().orElseThrow(AssertionError::new)));
+          for (final var avcount : attrValueCounts.entrySet())
+            attrImpurity += impurityFunction
+                .applyAsDouble(Utils.valueCounts(
+                    filteredData(setMembership.and(r -> avcount.getKey().testForOptional(r.getAsNumber(attrIndex))))
+                        .unordered().map(Pair::second)))
+                * avcount.getValue() / totalLength;
+        }
         case CATEGORICAL -> {
           // Split on attribute
           final var attrValueCounts = Utils
@@ -364,16 +413,21 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
       final String branchDescription = branchPair.first();
       final var branch = branchPair.second();
       final var branchDataFilter = branch.and(root::filterFromRoot);
-      // Check if we have at least one data point in this branch
+      // Check if we have at least minSamplesToSplit data points in this branch
       if (filteredData(branchDataFilter).unordered().findAny().isEmpty())
         continue;
       final Node node;
-      if (childDepth < depthLimit && !attributesToBranch.isEmpty()) { // I can split further from here.
+      if (childDepth < depthLimit && !attributesToBranch.isEmpty()
+          && filteredData(branchDataFilter).unordered().skip(minSamplesToSplit - 1).findAny().isPresent()
+      // this last condition checks whether we have enough samples to split here.
+      ) { // I can split further from here.
         final int attrIndex = findSplittingAttribute(branchDataFilter, attributesToBranch.iterator());
         if (attrIndex < 0)
           continue;
         node = switch (attrKinds[attrIndex]) {
-          case CONTINUOUS -> throw new UnsupportedOperationException();
+          case CONTINUOUS ->
+            new RealAttrNode(attrIndex, root, branchDescription, branch, filteredData(branchDataFilter).unordered()
+                .mapToDouble(p -> p.first().getAsNumber(attrIndex).orElseThrow().doubleValue()).summaryStatistics());
           case CATEGORICAL -> new CategoricalAttrNode(attrIndex, root, branchDescription, branch);
         };
       } else { // Result node calculation, either on reaching depth or when no more attributes
@@ -401,7 +455,7 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
     final int rootAttrIndex = findSplittingAttribute(Utils.constantPredicate(true), null);
     assert rootAttrIndex >= 0;
     treeRoot = switch (attrKinds[rootAttrIndex]) {
-      case CONTINUOUS -> throw new UnsupportedOperationException();
+      case CONTINUOUS -> new RealAttrNode(rootAttrIndex);
       case CATEGORICAL -> new CategoricalAttrNode(rootAttrIndex);
     };
     final var attributesSelected = new HashSet<Integer>();
@@ -409,7 +463,7 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
     buildTree(treeRoot, attributesSelected);
   }
 
-  public ResultType predict(final R input) {
+  public ResultType decide(final R input) throws NoSuchElementException {
     if (treeRoot == null)
       throw new IllegalStateException();
     Node current = treeRoot;
@@ -441,6 +495,7 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
   }
 
   public void walkTree(Appendable out) throws IOException {
-    if(treeRoot != null) treeRoot.walkTree(out);
+    if (treeRoot != null)
+      treeRoot.walkTree(out);
   }
 }

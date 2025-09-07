@@ -7,28 +7,33 @@ public class DecisionTreeClassifier<R extends Row, C> implements Classifier<R, C
   /** Actual decision tree. */
   protected final DecisionTree<R, C, C> dtree;
 
-  protected DecisionTreeClassifier(AttrKind[] attrKinds, String[] columnNames, int depthLimit,
+  protected DecisionTreeClassifier(AttrKind[] attrKinds, String[] columnNames, int depthLimit, int realAttributeSplits, int minSamplesToSplit,
       ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction,
       Function<? super Stream<Pair<R, C>>, ? extends C> summarizer) {
-    dtree = new DecisionTree<>(attrKinds, columnNames, depthLimit, summarizer, impurityFunction);
+    dtree = new DecisionTree<>(attrKinds, columnNames, depthLimit, realAttributeSplits, minSamplesToSplit, summarizer, impurityFunction);
   }
 
-  public DecisionTreeClassifier(AttrKind[] attrKinds, String[] columnNames, int depthLimit,
+  public DecisionTreeClassifier(AttrKind[] attrKinds, String[] columnNames, int depthLimit, int realAttributeSplits, int minSamplesToSplit,
       ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
-    this(attrKinds, columnNames, depthLimit, impurityFunction, DecisionTreeClassifier::summarizeResult);
+    this(attrKinds, columnNames, depthLimit, realAttributeSplits, minSamplesToSplit, impurityFunction, DecisionTreeClassifier::summarizeResult);
   }
 
-  public DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit,
+  public DecisionTreeClassifier(AttrKind[] attrKinds, String[] columnNames, int depthLimit, int realAttributeSplits,
       ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
-    this(attrKinds, null, depthLimit, impurityFunction, DecisionTreeClassifier::summarizeResult);
+    this(attrKinds, columnNames, depthLimit, realAttributeSplits, 1, impurityFunction, DecisionTreeClassifier::summarizeResult);
   }
 
-  public DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit) {
-    dtree = new DecisionTree<>(attrKinds, depthLimit, DecisionTreeClassifier::summarizeResult);
+  public DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit, int realAttributeSplits,
+      ToDoubleFunction<? super Map<?, ? extends Number>> impurityFunction) {
+    this(attrKinds, null, depthLimit, realAttributeSplits, 1, impurityFunction, DecisionTreeClassifier::summarizeResult);
   }
 
-  public DecisionTreeClassifier(AttrKind[] attrKinds) {
-    this(attrKinds, attrKinds.length + 1);
+  public DecisionTreeClassifier(AttrKind[] attrKinds, int depthLimit, int realAttributeSplits) {
+    dtree = new DecisionTree<>(attrKinds, depthLimit, realAttributeSplits, DecisionTreeClassifier::summarizeResult);
+  }
+
+  public DecisionTreeClassifier(AttrKind[] attrKinds, int realAttributeSplits) {
+    this(attrKinds, attrKinds.length + 1, realAttributeSplits);
   }
 
   public final int getNumAttributes() {
@@ -62,8 +67,12 @@ public class DecisionTreeClassifier<R extends Row, C> implements Classifier<R, C
   }
 
   @Override
-  public C predict(R input) {
-    return dtree.predict(input);
+  public Optional<C> predict(R input) {
+    try {
+      return Optional.of(dtree.decide(input));
+    } catch (NoSuchElementException ex) {
+      return Optional.empty();
+    }
   }
 
   /** Result summary when we reach the end of a branch. */
@@ -74,6 +83,6 @@ public class DecisionTreeClassifier<R extends Row, C> implements Classifier<R, C
         //.parallelStream() //No real benefit to parallelize here
         .unordered()
         .max((e1, e2) -> e1.getValue().compareTo(e2.getValue()))
-        .orElseThrow(AssertionError::new).getKey();
+        .orElseThrow(IllegalArgumentException::new).getKey();
   }
 }

@@ -462,4 +462,19 @@ final class Utils {
       return 0D; // Mathematically proven
     return countedGiniImpurity(counts.values()::stream);
   }
+
+  /**
+   * Checks whether {@code x} is a perfect power of 2 in unsigned arithmetic. If
+   * it is, returns the base 2 logarithm, else returns -1.
+   */
+  static int perfectLog2(long x) {
+    if (x == 0)
+      return -1;
+    int power = 0;
+    while ((x & 1) == 0) {
+      x >>>= 1;
+      power++;
+    }
+    return x == 1 ? power : -1;
+  }
 }

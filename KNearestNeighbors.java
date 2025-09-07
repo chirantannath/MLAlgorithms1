@@ -27,7 +27,7 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
     knownPatterns.add(new Pair<>(input, outputCls));
   }
 
-  @Override public C predict(Float64Row input) {
+  @Override public Optional<C> predict(Float64Row input) {
     final var selected = Utils.selectSmallestK(knownPatterns.iterator(), (p1, p2) -> Double.compare(
        distanceFunction.applyAsDouble(p1.first(), input),
        distanceFunction.applyAsDouble(p2.first(), input)
@@ -44,6 +44,6 @@ public class KNearestNeighbors<C> implements Classifier<Float64Row, C> {
         maxClassCount = classCount;
       }
     }
-    return maxClass;
+    return Optional.of(maxClass);
   }
 }

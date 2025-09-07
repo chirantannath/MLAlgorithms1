@@ -19,23 +19,21 @@ public class MinimumDistanceClassifier<C> implements Classifier<Float64Row, C> {
     classMeans.merge(outputCls, new Float64RowStats(input, 1), (oldMean, initial) -> oldMean.add(input));
   }
 
-  @Override public C predict(Float64Row input) {
+  @Override public Optional<C> predict(Float64Row input) {
     return classMeans.entrySet().stream()
     .min((e1, e2) -> Double.compare(
       distanceFunction.applyAsDouble(e1.getValue().getMean(), input),
       distanceFunction.applyAsDouble(e2.getValue().getMean(), input)
     ))
-    .orElseThrow(IllegalStateException::new)
-    .getKey();
+    .map(Map.Entry::getKey);
   }
 
-  public C predictParallel(Float64Row input) {
+  public Optional<C> predictParallel(Float64Row input) {
     return classMeans.entrySet().stream().unordered().parallel()
     .min((e1, e2) -> Double.compare(
       distanceFunction.applyAsDouble(e1.getValue().getMean(), input),
       distanceFunction.applyAsDouble(e2.getValue().getMean(), input)
     ))
-    .orElseThrow(IllegalStateException::new)
-    .getKey();
+    .map(Map.Entry::getKey);
   }
 }

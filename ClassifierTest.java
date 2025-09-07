@@ -26,7 +26,8 @@ final class ClassifierTest {
         final var useRandomizedSeed = Character.toLowerCase(sc.nextLine().trim().charAt(0)) == 'y';
         // My birthday as my seed
         final Random rng;
-        if(useRandomizedSeed) rng = new Random();
+        if (useRandomizedSeed)
+          rng = new Random();
         else {
           System.out.print("Enter 64-bit signed integer for seed: ");
           rng = new Random(Long.parseLong(sc.nextLine().trim()));
@@ -60,10 +61,10 @@ final class ClassifierTest {
         inputTest = originalTest.stream().parallel()
             .map(row -> new Float64Row(row.project(inFeatures)))
             .collect(Collectors.toCollection(ArrayList::new));
-        
+
         System.out.print("Use IQR scaling?[y/n]: ");
         final boolean useRobust = Character.toLowerCase(sc.nextLine().trim().charAt(0)) == 'y';
-        if(useRobust) {
+        if (useRobust) {
           final var robustScaler = new RobustScaler(inFeatures.length);
           robustScaler.fit(inputTrain.iterator());
           robustScaler.fit(inputTest.iterator());
@@ -74,7 +75,7 @@ final class ClassifierTest {
 
         System.out.print("Use standardization?[y/n]: ");
         final boolean useStandardization = Character.toLowerCase(sc.nextLine().trim().charAt(0)) == 'y';
-        if(useStandardization) {
+        if (useStandardization) {
           final var stdScaler = new StandardScaler(inFeatures.length);
           stdScaler.fit(inputTrain.iterator());
           stdScaler.fit(inputTest.iterator());
@@ -82,7 +83,7 @@ final class ClassifierTest {
           Float64Dataset.inplaceTransform(inputTrain, stdScaler);
           Float64Dataset.inplaceTransform(inputTest, stdScaler);
         }
-        
+
         // original = null; originalTrain = null; originalTest = null;
       }
 
@@ -94,11 +95,33 @@ final class ClassifierTest {
       System.gc();
       System.out.println();
 
+      System.out.print("Enter decision tree real value binning splits: ");
+      final int realAttributeSplits = Integer.parseInt(sc.nextLine().trim());
+      System.out.print("Enter decision tree max depth: ");
+      final int depthLimit = Integer.parseInt(sc.nextLine().trim());
+      System.out.print("Enter minimum number of samples to split nodes: ");
+      final int minSamplesToSplit = Integer.parseInt(sc.nextLine().trim());
+      final AttrKind[] attrKinds = IntStream.range(0, inFeatures.length).mapToObj(i -> AttrKind.CONTINUOUS)
+          .toArray(AttrKind[]::new);
+      {
+        final var dtree = new DecisionTreeClassifier<Float64Row, String>(attrKinds, columnNames, depthLimit,
+            realAttributeSplits, minSamplesToSplit, m -> Utils.countedEntropy(m.values().stream().unordered()));
+        try {
+          testClassifier(dtree, inputTrain, outcomeTrain, inputTest, outcomeTest);
+        } catch (RuntimeException ex) {
+          ex.printStackTrace(System.err);
+        }
+        // System.out.println("\nTree structure:");
+        // dtree.walkTree(System.out);
+      }
+
+      System.gc();
+      System.out.println();
+
       System.out.print("Enter KNN parameter K: ");
       final int K = Integer.parseInt(sc.nextLine().trim());
       System.out.println("KNN parameter K: " + K);
       testClassifier(new KNearestNeighbors<>(K), inputTrain, outcomeTrain, inputTest, outcomeTest);
-
     }
   }
 
@@ -118,6 +141,15 @@ final class ClassifierTest {
     ts = System.currentTimeMillis() - ts;
     System.out.println("Fitting took " + ts + "ms time");
 
+    if (classifier instanceof DecisionTreeClassifier<?, ?> dtree) {
+      System.out.println("Tree structure:");
+      try {
+        dtree.walkTree(System.out);
+      } catch (java.io.IOException ex) {
+      }
+      System.out.println();
+    }
+
     System.out.println(classifier.getClass().getName() + " evaluation starting...");
 
     ts = System.currentTimeMillis();
@@ -135,7 +167,8 @@ final class ClassifierTest {
             .mapToObj(i -> new Pair<IR, OP>(inputTest.get(i), outcomeTest.get(i))),
         null /* cnt -> System.out.printf("%d entries checked out of %d\r", cnt, testSize) */);
     ts = System.currentTimeMillis() - ts;
-    System.out.printf("Test accuracy score: %f%% (%d out of %d); took %dms time\n", testScore * 100D / testSize, testScore,
+    System.out.printf("Test accuracy score: %f%% (%d out of %d); took %dms time\n", testScore * 100D / testSize,
+        testScore,
         testSize, ts);
   }
 }
