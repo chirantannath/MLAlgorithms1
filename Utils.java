@@ -17,6 +17,11 @@ final class Utils {
     public boolean test(T t) {
       return logicValue;
     }
+
+    @Override
+    public Predicate<T> negate() {
+      return constantPredicate(!logicValue);
+    }
   }
 
   private static final ConstantPredicate<?> CP_TRUE = new ConstantPredicate<>(true);
@@ -476,5 +481,188 @@ final class Utils {
       power++;
     }
     return x == 1 ? power : -1;
+  }
+
+  static double[][] filledMatrixDouble(int rlen, int clen, double value) {
+    final var result = new double[rlen][clen];
+    for (int r = 0; r < rlen; r++)
+      for (int c = 0; c < clen; c++)
+        result[r][c] = value;
+    return result;
+  }
+
+  static double[][] diagonalMatrixDouble(double[] diagonal) {
+    final var result = new double[diagonal.length][diagonal.length];
+    for (int r = 0; r < diagonal.length; r++)
+      for (int c = 0; c < diagonal.length; c++)
+        result[r][c] = r == c ? diagonal[c] : 0d;
+    return result;
+  }
+
+  static double[][] diagonalMatrixDouble(int squarelen, double value) {
+    final var result = new double[squarelen][squarelen];
+    for (int r = 0; r < squarelen; r++)
+      for (int c = 0; c < squarelen; c++)
+        result[r][c] = r == c ? value : 0d;
+    return result;
+  }
+
+  static double[][] matrixClone(double[][] m) {
+    final var result = new double[m.length][];
+    for (int r = 0; r < m.length; r++)
+      result[r] = Arrays.copyOf(m[r], m[r].length);
+    return result;
+  }
+
+  static double[][] matrixTranspose(double[][] m) {
+    final int rlen = m.length;
+    if (rlen == 0)
+      return new double[0][];
+    final int clen = m[0].length;
+    final var result = new double[clen][rlen];
+
+    for (int r = 0; r < rlen; r++)
+      for (int c = 0; c < clen; c++)
+        result[c][r] = m[r][c];
+    return result;
+  }
+
+  static void squareMatrixTranspose(double[][] m) {
+    if (m.length == 0)
+      return;
+    if (m.length != m[0].length)
+      throw new IllegalArgumentException();
+    double t;
+
+    for (int r = 0; r < m.length; r++)
+      for (int c = 0; c < m.length; c++) {
+        t = m[r][c];
+        m[r][c] = m[c][r];
+        m[c][r] = t;
+      }
+  }
+
+  static void matrixAddAccumulate(double[][] acc, double[][] operand) {
+    final int rlen = acc.length;
+    if (operand.length != rlen)
+      throw new IllegalArgumentException();
+    if (rlen == 0)
+      return;
+    final int clen = acc[0].length;
+    if (operand[0].length != clen)
+      throw new IllegalArgumentException();
+
+    for (int r = 0; r < rlen; r++)
+      for (int c = 0; c < clen; c++)
+        acc[r][c] += operand[r][c];
+  }
+
+  static double[][] matrixAdd(double[][] left, double[][] right) {
+    final var result = matrixClone(left);
+    matrixAddAccumulate(result, right);
+    return result;
+  }
+
+  static void matrixSubtractAccumulate(double[][] acc, double[][] operand) {
+    final int rlen = acc.length;
+    if (operand.length != rlen)
+      throw new IllegalArgumentException();
+    if (rlen == 0)
+      return;
+    final int clen = acc[0].length;
+    if (operand[0].length != clen)
+      throw new IllegalArgumentException();
+
+    for (int r = 0; r < rlen; r++)
+      for (int c = 0; c < clen; c++)
+        acc[r][c] -= operand[r][c];
+  }
+
+  static double[][] matrixSubtract(double[][] left, double[][] right) {
+    final var result = matrixClone(left);
+    matrixSubtractAccumulate(result, right);
+    return result;
+  }
+
+  static void matrixMultiplyAccumulate(double[][] m, double scalar) {
+    for (var row : m)
+      for (int c = 0; c < row.length; c++)
+        row[c] *= scalar;
+  }
+
+  static double[][] matrixMultiply(double[][] m, double scalar) {
+    final var result = matrixClone(m);
+    matrixMultiplyAccumulate(result, scalar);
+    return result;
+  }
+
+  static double[][] matrixMultiply(double[][] left, double[][] right) {
+    final var m = left.length;
+    if (m == 0)
+      return new double[0][];
+    final var n = left[0].length;
+    if (n != right.length)
+      throw new IllegalArgumentException();
+    if (n == 0)
+      return new double[0][];
+    final var p = right[0].length;
+    final var result = new double[m][p];
+
+    for (int i = 0; i < m; i++)
+      for (int j = 0; j < p; j++) {
+        result[i][j] = 0;
+        for (int k = 0; k < n; k++)
+          result[i][j] += (left[i][k] * right[k][j]);
+      }
+    return result;
+  }
+
+  static double[] matrixMultiply(double[][] m, double[] vector) {
+    final var rlen = m.length;
+    if (rlen == 0)
+      return new double[0];
+    final var clen = m[0].length;
+    if (clen != vector.length)
+      throw new IllegalArgumentException();
+    final var result = new double[rlen];
+
+    for (int r = 0; r < rlen; r++) {
+      result[r] = 0;
+      for (int c = 0; c < clen; c++)
+        result[r] += (m[r][c] * vector[c]);
+    }
+    return result;
+  }
+
+  static double[][] matrixMultiplyParallel(final double[][] left, final double[][] right) {
+    final var m = left.length;
+    if (m == 0)
+      return new double[0][];
+    final var n = left[0].length;
+    if (n != right.length)
+      throw new IllegalArgumentException();
+    if (n == 0)
+      return new double[0][];
+    final var p = right[0].length;
+    final var result = new double[m][p];
+
+    IntStream.range(0, m).unordered().parallel().forEach(i -> IntStream.range(0, p).unordered().parallel().forEach(
+        j -> result[i][j] = IntStream.range(0, n).unordered().parallel().mapToDouble(k -> left[i][k] * right[k][j])
+            .sum()));
+    return result;
+  }
+
+  static double[] matrixMultiplyParallel(final double[][] m, final double[] vector) {
+    final var rlen = m.length;
+    if (rlen == 0)
+      return new double[0];
+    final var clen = m[0].length;
+    if (clen != vector.length)
+      throw new IllegalArgumentException();
+    final var result = new double[rlen];
+
+    IntStream.range(0, rlen).unordered().parallel().forEach(
+        r -> result[r] = IntStream.range(0, clen).unordered().parallel().mapToDouble(c -> m[r][c] * vector[c]).sum());
+    return result;
   }
 }
