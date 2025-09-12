@@ -458,7 +458,7 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
       case CONTINUOUS -> new RealAttrNode(rootAttrIndex);
       case CATEGORICAL -> new CategoricalAttrNode(rootAttrIndex);
     };
-    final var attributesSelected = new HashSet<Integer>();
+    final var attributesSelected = new Utils.WholeNumbersSet();
     attributesSelected.add(rootAttrIndex);
     buildTree(treeRoot, attributesSelected);
   }

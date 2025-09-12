@@ -181,6 +181,46 @@ public final class Float64Row implements Row, IntToDoubleFunction {
     return Math.pow(sum, 1D / p);
   }
 
+  public double dotProduct(Float64Row rightOperand) {
+    final int length = getRowLength();
+    if (length != rightOperand.getRowLength())
+      throw new IllegalArgumentException();
+    double sum = 0, li, ri;
+    for (int i = 0; i < length; i++) {
+      li = getAsDouble(i);
+      ri = rightOperand.getAsDouble(i);
+      sum += li * ri;
+    }
+    return sum;
+  }
+
+  public double vectorMagnitude() {
+    final int length = getRowLength();
+    double sum = 0, xi;
+    for (int i = 0; i < length; i++) {
+      xi = getAsDouble(i);
+      sum += xi * xi;
+    }
+    return Math.sqrt(sum);
+  }
+
+  public double distanceCosineSimilarity(Float64Row rightOperand) {
+    final int length = getRowLength();
+    if (length != rightOperand.getRowLength())
+      throw new IllegalArgumentException();
+    double sum = 0, li, ri, modLeft = 0, modRight = 0;
+    for (int i = 0; i < length; i++) {
+      li = getAsDouble(i);
+      ri = rightOperand.getAsDouble(i);
+      modLeft += li * li;
+      modRight += ri * ri;
+      sum += li * ri;
+    }
+    sum /= Math.sqrt(modLeft);
+    sum /= Math.sqrt(modRight);
+    return sum;
+  }
+
   public static Float64Row concatenate(Float64Row... rows) {
     final double[][] data = new double[rows.length][];
     for (int i = 0; i < rows.length; i++)
