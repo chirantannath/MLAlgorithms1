@@ -221,6 +221,29 @@ public final class Float64Row implements Row, IntToDoubleFunction {
     return sum;
   }
 
+  public double distancePearsonCorrelation(Float64Row rightOperand) {
+    final int length = getRowLength();
+    if (length != rightOperand.getRowLength())
+      throw new IllegalArgumentException();
+
+    double leftMean = 0, rightMean = 0;
+    for (int i = 0; i < length; i++) {
+      leftMean += (getAsDouble(i) / length);
+      rightMean += (rightOperand.getAsDouble(i) / length);
+    }
+
+    double leftSSR = 0, rightSSR = 0, residualProductSum = 0, leftResidual, rightResidual;
+    for (int i = 0; i < length; i++) {
+      leftResidual = getAsDouble(i) - leftMean;
+      rightResidual = rightOperand.getAsDouble(i) - rightMean;
+      residualProductSum += (leftResidual * rightResidual);
+      leftSSR += (leftResidual * leftResidual);
+      rightSSR += (rightResidual * rightResidual);
+    }
+
+    return 1d - residualProductSum / Math.sqrt(leftSSR * rightSSR);
+  }
+
   public static Float64Row concatenate(Float64Row... rows) {
     final double[][] data = new double[rows.length][];
     for (int i = 0; i < rows.length; i++)
