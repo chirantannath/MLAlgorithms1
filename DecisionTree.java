@@ -253,7 +253,7 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
   }
 
   /** All the known data for which to build tree. */
-  protected final List<Pair<R, IntermediateType>> rootData = new ArrayList<>();
+  protected List<Pair<R, IntermediateType>> rootData = new ArrayList<>();
   /** Attribute types of the rows. */
   protected final AttrKind[] attrKinds;
   /** Column names, may simply be index numbers if not specified. */
@@ -497,5 +497,19 @@ public class DecisionTree<R extends Row, IntermediateType, ResultType> {
   public void walkTree(Appendable out) throws IOException {
     if (treeRoot != null)
       treeRoot.walkTree(out);
+  }
+
+  /**
+   * Does not remember examples stored any more; the built tree (if stored) is
+   * still kept.
+   */
+  public void forgetExamples() {
+    rootData = null;
+  }
+
+  /** Resets the tree. Data needs to be added and the tree built again. */
+  public void reset() {
+    rootData = new ArrayList<>();
+    treeRoot = null;
   }
 }

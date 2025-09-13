@@ -12,6 +12,7 @@ final class ClassifierTest {
     final int[] inFeatures;
     final int outFeature;
     final int trainSize, testSize;
+    final Random rng;
 
     try (final Scanner sc = new Scanner(System.in)) {
       {
@@ -25,7 +26,7 @@ final class ClassifierTest {
         System.out.print("Use randomized seed?[y/n]: ");
         final var useRandomizedSeed = Character.toLowerCase(sc.nextLine().trim().charAt(0)) == 'y';
         // My birthday as my seed
-        final Random rng;
+        // final Random rng;
         if (useRandomizedSeed)
           rng = new Random();
         else {
@@ -86,6 +87,11 @@ final class ClassifierTest {
 
         // original = null; originalTrain = null; originalTest = null;
       }
+
+      System.gc();
+      System.out.println();
+
+      testClassifier(new RandomClassifier<>(rng), inputTrain, outcomeTrain, inputTest, outcomeTest);
 
       System.gc();
       System.out.println();
