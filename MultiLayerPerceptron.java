@@ -194,7 +194,7 @@ public class MultiLayerPerceptron {
    * Do backward pass to adjust weights. 
    * @implNote This version applies the standard backpropagation algorithm.
    */
-  public void backwardPass(double[] expectedOutputs, LossFunction lossFunction) {
+  public void backwardPass(double[] expectedOutputs, LossFunction lossFunction, double learningRate) {
     Objects.requireNonNull(lossFunction);
     if (outputLayerSize != expectedOutputs.length)
       throw new IllegalArgumentException();

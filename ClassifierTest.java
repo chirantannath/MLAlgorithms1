@@ -96,7 +96,7 @@ final class ClassifierTest {
       System.gc();
       System.out.println();
 
-      testClassifier(new MinimumDistanceClassifier<>(), inputTrain, outcomeTrain, inputTest, outcomeTest);
+      testClassifier(new MinimumDistanceClassifier<>(Float64Row::distanceChebyshev), inputTrain, outcomeTrain, inputTest, outcomeTest);
 
       System.gc();
       System.out.println();
@@ -127,7 +127,7 @@ final class ClassifierTest {
       System.out.print("Enter KNN parameter K: ");
       final int K = Integer.parseInt(sc.nextLine().trim());
       System.out.println("KNN parameter K: " + K);
-      testClassifier(new KNearestNeighbors<>(K), inputTrain, outcomeTrain, inputTest, outcomeTest);
+      testClassifier(new KNearestNeighbors<>(K, Float64Row::distanceChebyshev), inputTrain, outcomeTrain, inputTest, outcomeTest);
     }
   }
 
