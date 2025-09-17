@@ -154,12 +154,12 @@ public final class Float64Row implements Row, IntToDoubleFunction {
   }
 
   public double distanceChebyshev(Float64Row rightOperand) {
-    if (getRowLength() != rightOperand.getRowLength())
-      throw new IllegalArgumentException();
-    double max, step;
     final int length = getRowLength();
     if (length == 0)
       throw new IllegalStateException();
+    if (length != rightOperand.getRowLength())
+      throw new IllegalArgumentException();
+    double max, step;
     max = Math.abs(getAsDouble(0) - rightOperand.getAsDouble(0));
     for (int i = 1; i < length; i++) {
       step = Math.abs(getAsDouble(i) - rightOperand.getAsDouble(i));

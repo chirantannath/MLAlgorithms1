@@ -413,6 +413,20 @@ final class Utils {
     return Math.log(x) / LOG_OF_2;
   }
 
+  static double tanh(double x) {
+    final double exp = Math.exp(x);
+    final double mexp = Math.exp(-x);
+    return (exp - mexp) / (exp + mexp);
+  }
+
+  static double sinh(double x) {
+    return Math.scalb(Math.exp(x) - Math.exp(-x), -1);
+  }
+
+  static double cosh(double x) {
+    return Math.scalb(Math.exp(x) + Math.exp(-x), -1);
+  }
+
   /** Counts (distinct) objects. Just a common wrapper. */
   static <T> Map<T, Long> valueCounts(final Stream<T> objects) {
     return Collections.unmodifiableMap(objects.unordered().parallel()
@@ -483,27 +497,56 @@ final class Utils {
     return x == 1 ? power : -1;
   }
 
+  static void filledMatrixDouble(double[][] m, double value) {
+    int i;
+    for (var row : m)
+      for (i = 0; i < row.length; i++)
+        row[i] = value;
+  }
+
+  static void filledMatrixDouble(double[][] m, ToDoubleBiFunction<Integer, Integer> values) {
+    int r, c;
+    for (r = 0; r < m.length; r++)
+      for (c = 0; c < m[r].length; c++)
+        m[r][c] = values.applyAsDouble(r, c);
+  }
+
   static double[][] filledMatrixDouble(int rlen, int clen, double value) {
     final var result = new double[rlen][clen];
-    for (int r = 0; r < rlen; r++)
-      for (int c = 0; c < clen; c++)
-        result[r][c] = value;
+    filledMatrixDouble(result, value);
     return result;
+  }
+
+  static void diagonalMatrixDouble(double[][] m, double[] diagonal) {
+    final int length = m.length;
+    if (length == 0)
+      return;
+    if (diagonal.length < length || length != m[0].length)
+      throw new IllegalArgumentException();
+    for (int r = 0; r < diagonal.length; r++)
+      for (int c = 0; c < diagonal.length; c++)
+        m[r][c] = r == c ? diagonal[c] : 0d;
   }
 
   static double[][] diagonalMatrixDouble(double[] diagonal) {
     final var result = new double[diagonal.length][diagonal.length];
-    for (int r = 0; r < diagonal.length; r++)
-      for (int c = 0; c < diagonal.length; c++)
-        result[r][c] = r == c ? diagonal[c] : 0d;
+    diagonalMatrixDouble(result, diagonal);
     return result;
+  }
+
+  static void diagonalMatrixDouble(double[][] m, double value) {
+    if (m.length == 0)
+      return;
+    if (m.length != m[0].length)
+      throw new IllegalArgumentException();
+    for (int r = 0; r < m.length; r++)
+      for (int c = 0; c < m.length; c++)
+        m[r][c] = r == c ? value : 0d;
   }
 
   static double[][] diagonalMatrixDouble(int squarelen, double value) {
     final var result = new double[squarelen][squarelen];
-    for (int r = 0; r < squarelen; r++)
-      for (int c = 0; c < squarelen; c++)
-        result[r][c] = r == c ? value : 0d;
+    diagonalMatrixDouble(result, value);
     return result;
   }
 
@@ -596,6 +639,27 @@ final class Utils {
     return result;
   }
 
+  static void matrixMultiply(double[][] left, double[][] right, double[][] result) {
+    final var m = left.length;
+    if (m == 0)
+      return;
+    final var n = left[0].length;
+    if (n != right.length)
+      throw new IllegalArgumentException();
+    if (n == 0)
+      return;
+    final var p = right[0].length;
+    if (result.length != m || result[0].length != p)
+      throw new IllegalArgumentException();
+
+    for (int i = 0; i < m; i++)
+      for (int j = 0; j < p; j++) {
+        result[i][j] = 0;
+        for (int k = 0; k < n; k++)
+          result[i][j] += (left[i][k] * right[k][j]);
+      }
+  }
+
   static double[][] matrixMultiply(double[][] left, double[][] right) {
     final var m = left.length;
     if (m == 0)
@@ -607,14 +671,23 @@ final class Utils {
       return new double[0][];
     final var p = right[0].length;
     final var result = new double[m][p];
-
-    for (int i = 0; i < m; i++)
-      for (int j = 0; j < p; j++) {
-        result[i][j] = 0;
-        for (int k = 0; k < n; k++)
-          result[i][j] += (left[i][k] * right[k][j]);
-      }
+    matrixMultiply(left, right, result);
     return result;
+  }
+
+  static void matrixMultiply(double[][] m, double[] vector, double[] result) {
+    final var rlen = m.length;
+    if (rlen == 0)
+      return;
+    final var clen = m[0].length;
+    if (clen > vector.length || rlen > result.length)
+      throw new IllegalArgumentException();
+
+    for (int r = 0; r < rlen; r++) {
+      result[r] = 0;
+      for (int c = 0; c < clen; c++)
+        result[r] += (m[r][c] * vector[c]);
+    }
   }
 
   static double[] matrixMultiply(double[][] m, double[] vector) {
@@ -622,16 +695,29 @@ final class Utils {
     if (rlen == 0)
       return new double[0];
     final var clen = m[0].length;
-    if (clen != vector.length)
+    if (clen > vector.length)
       throw new IllegalArgumentException();
     final var result = new double[rlen];
-
-    for (int r = 0; r < rlen; r++) {
-      result[r] = 0;
-      for (int c = 0; c < clen; c++)
-        result[r] += (m[r][c] * vector[c]);
-    }
+    matrixMultiply(m, vector, result);
     return result;
+  }
+
+  static void matrixMultiplyParallel(final double[][] left, final double[][] right, final double[][] result) {
+    final var m = left.length;
+    if (m == 0)
+      return;
+    final var n = left[0].length;
+    if (n != right.length)
+      throw new IllegalArgumentException();
+    if (n == 0)
+      return;
+    final var p = right[0].length;
+    if (result.length != m || result[0].length != p)
+      throw new IllegalArgumentException();
+
+    IntStream.range(0, m).unordered().parallel().forEach(i -> IntStream.range(0, p).unordered().parallel().forEach(
+        j -> result[i][j] = IntStream.range(0, n).unordered().parallel().mapToDouble(k -> left[i][k] * right[k][j])
+            .sum()));
   }
 
   static double[][] matrixMultiplyParallel(final double[][] left, final double[][] right) {
@@ -645,11 +731,20 @@ final class Utils {
       return new double[0][];
     final var p = right[0].length;
     final var result = new double[m][p];
-
-    IntStream.range(0, m).unordered().parallel().forEach(i -> IntStream.range(0, p).unordered().parallel().forEach(
-        j -> result[i][j] = IntStream.range(0, n).unordered().parallel().mapToDouble(k -> left[i][k] * right[k][j])
-            .sum()));
+    matrixMultiplyParallel(left, right, result);
     return result;
+  }
+
+  static void matrixMultiplyParallel(final double[][] m, final double[] vector, final double[] result) {
+    final var rlen = m.length;
+    if (rlen == 0)
+      return;
+    final var clen = m[0].length;
+    if (clen > vector.length || rlen > result.length)
+      throw new IllegalArgumentException();
+
+    IntStream.range(0, rlen).unordered().parallel().forEach(
+        r -> result[r] = IntStream.range(0, clen).unordered().parallel().mapToDouble(c -> m[r][c] * vector[c]).sum());
   }
 
   static double[] matrixMultiplyParallel(final double[][] m, final double[] vector) {
@@ -657,12 +752,10 @@ final class Utils {
     if (rlen == 0)
       return new double[0];
     final var clen = m[0].length;
-    if (clen != vector.length)
+    if (clen > vector.length)
       throw new IllegalArgumentException();
     final var result = new double[rlen];
-
-    IntStream.range(0, rlen).unordered().parallel().forEach(
-        r -> result[r] = IntStream.range(0, clen).unordered().parallel().mapToDouble(c -> m[r][c] * vector[c]).sum());
+    matrixMultiplyParallel(m, vector, result);
     return result;
   }
 }
