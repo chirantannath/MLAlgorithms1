@@ -1,4 +1,5 @@
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.*;
 import java.util.stream.*;
 
@@ -306,7 +307,43 @@ final class Utils {
       heap.add(element);
     }
     assert heap.size() <= k;
-    return Collections.unmodifiableCollection(heap);
+    return heap.parallelStream().sorted(comparator).collect(Collectors.toUnmodifiableList());
+  }
+
+  /**
+   * Choose {@numSamples} number of samples (from 0 to {@code numSamples - 1})
+   * <i>with replacement</i>.
+   */
+  static IntStream bootstrapAggregatingSamples(int numSamples, Supplier<? extends Random> randomSource) {
+    return randomSource.get().ints(numSamples, 0, numSamples).unordered();
+  }
+
+  static IntStream bootstrapAggregatingSamples(int numSamples) {
+    return bootstrapAggregatingSamples(numSamples, Random::new);
+  }
+
+  static IntStream bootstrapAggregatingSamplesParallel(int numSamples, Supplier<? extends Random> randomSource) {
+    return IntStream.generate(() -> randomSource.get().nextInt(numSamples)).unordered().parallel().limit(numSamples);
+  }
+
+  static IntStream bootstrapAggregatingSamplesParallel(int numSamples) {
+    return bootstrapAggregatingSamplesParallel(numSamples, ThreadLocalRandom::current);
+  }
+
+  static LongStream bootstrapAggregatingSamples(long numSamples, Supplier<? extends Random> randomSource) {
+    return randomSource.get().longs(numSamples, 0, numSamples).unordered();
+  }
+  
+  static LongStream bootstrapAggregatingSamples(long numSamples) {
+    return bootstrapAggregatingSamples(numSamples, Random::new);
+  }
+
+  static LongStream bootstrapAggregatingSamplesParallel(long numSamples, Supplier<? extends Random> randomSource) {
+    return LongStream.generate(() -> randomSource.get().nextLong(numSamples)).unordered().parallel().limit(numSamples);
+  }
+
+  static LongStream bootstrapAggregatingSamplesParallel(long numSamples) {
+    return bootstrapAggregatingSamplesParallel(numSamples, ThreadLocalRandom::current);
   }
 
   /** Substitute for std::lower_bound in C++. */
