@@ -60,4 +60,55 @@ public interface LossFunction extends ToDoubleBiFunction<double[], double[]> {
       return Math.signum(actualValues[actualVariableIndex] - expectedValues[actualVariableIndex]) / actualValues.length;
     }
   };
+
+  public static final LossFunction LOG_LOSS = new LossFunction() {
+    @Override
+    public double applyAsDouble(double[] expectedValues, double[] actualValues) {
+      if (actualValues.length != expectedValues.length)
+        throw new IllegalArgumentException();
+      double sum = 0, step;
+      for (int i = 0; i < actualValues.length; i++) {
+        //to avoid taking log of 0
+        step = expectedValues[i] == 0 ? 0 : -expectedValues[i] * Math.log(actualValues[i]);
+        sum += step;
+      }
+      return sum;
+    }
+
+    @Override
+    public double applyDerivativeWRTActual(double[] expectedValues, double[] actualValues, int actualVariableIndex) {
+      if(actualValues.length != expectedValues.length)
+        throw new IllegalArgumentException();
+      return -expectedValues[actualVariableIndex] / actualValues[actualVariableIndex];
+    }
+  };
+
+  public static final LossFunction SOFTMAX_LOG_LOSS = new LossFunction() {
+    @Override
+    public double applyAsDouble(double[] expectedValues, double[] actualValues) {
+      if (actualValues.length != expectedValues.length)
+        throw new IllegalArgumentException();
+      double softmaxSum = 0, sum = 0, step;
+      for (int i = 0; i < actualValues.length; i++) {
+        step = -expectedValues[i] * actualValues[i];
+        sum += step;
+        softmaxSum += Math.exp(actualValues[i]);
+      }
+      return sum + actualValues.length * Math.log(softmaxSum);
+    }
+
+    @Override
+    public double applyDerivativeWRTActual(double[] expectedValues, double[] actualValues, int actualVariableIndex) {
+      if(actualValues.length != expectedValues.length)
+        throw new IllegalArgumentException();
+      double expActual = 0, softmaxSum = 0, step;
+      for(int i = 0; i < actualValues.length; i++) {
+        step = Math.exp(actualValues[i]);
+        softmaxSum += step;
+        if (i == actualVariableIndex) expActual = step;
+      }
+      return -expectedValues[actualVariableIndex] + actualValues.length * expActual / softmaxSum;
+    }
+    
+  };
 }

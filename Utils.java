@@ -34,10 +34,9 @@ final class Utils {
   }
 
   /**
-   * A set of integers internally storing using bit fields.
-   * This set CANNOT STORE NEGATIVE VALUES. Also note that the
-   * subset functions return an unmodifiable copy instead of a backing view on
-   * the set.
+   * A set of integers internally storing using bit fields. This set
+   * <strong>cannot store negative values</strong>. Also note that the subset
+   * functions return an unmodifiable copy instead of a backing view on the set.
    */
   public static final class WholeNumbersSet extends AbstractSet<Integer> implements SortedSet<Integer> {
     public final BitSet container;
@@ -333,7 +332,7 @@ final class Utils {
   static LongStream bootstrapAggregatingSamples(long numSamples, Supplier<? extends Random> randomSource) {
     return randomSource.get().longs(numSamples, 0, numSamples).unordered();
   }
-  
+
   static LongStream bootstrapAggregatingSamples(long numSamples) {
     return bootstrapAggregatingSamples(numSamples, Random::new);
   }

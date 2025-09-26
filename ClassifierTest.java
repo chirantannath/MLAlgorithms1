@@ -96,12 +96,13 @@ final class ClassifierTest {
       System.gc();
       System.out.println();
 
-      testClassifier(new MinimumDistanceClassifier<>(Float64Row::distanceChebyshev), inputTrain, outcomeTrain, inputTest, outcomeTest);
+      testClassifier(new MinimumDistanceClassifier<>(Float64Row::distanceChebyshev), inputTrain, outcomeTrain,
+          inputTest, outcomeTest);
 
       System.gc();
       System.out.println();
 
-      System.out.print("Enter decision tree real value binning splits: ");
+      /*System.out.print("Enter decision tree real value binning splits: ");
       final int realAttributeSplits = Integer.parseInt(sc.nextLine().trim());
       System.out.print("Enter decision tree max depth: ");
       final int depthLimit = Integer.parseInt(sc.nextLine().trim());
@@ -122,12 +123,27 @@ final class ClassifierTest {
       }
 
       System.gc();
+      System.out.println();*/
+
+      System.out.print("Enter learning rate for perceptrons: ");
+      final double learningRate = Double.parseDouble(sc.nextLine().trim());
+      System.out.print("Enter maximum number of epochs: ");
+      final long maxEpochs = Long.parseLong(sc.nextLine().trim());
+      {
+        final var perceptron = new PerceptronClassifier<>(inFeatures.length, learningRate, maxEpochs, Double.MIN_NORMAL,
+            ActivationFunction.SIGMOID, LossFunction.MEAN_SQUARED_ERROR, rng);
+        perceptron.setEpochNotifier(e -> System.out.printf("epoch %d/%d\r", e, maxEpochs));
+        testClassifier(perceptron, inputTrain, outcomeTrain, inputTest, outcomeTest);
+      }
+
+      /*System.gc();
       System.out.println();
 
       System.out.print("Enter KNN parameter K: ");
       final int K = Integer.parseInt(sc.nextLine().trim());
       System.out.println("KNN parameter K: " + K);
-      testClassifier(new KNearestNeighbors<>(K, Float64Row::distanceChebyshev), inputTrain, outcomeTrain, inputTest, outcomeTest);
+      testClassifier(new KNearestNeighbors<>(K, Float64Row::distanceChebyshev), inputTrain, outcomeTrain, inputTest,
+          outcomeTest);*/
     }
   }
 
