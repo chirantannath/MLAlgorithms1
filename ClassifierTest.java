@@ -129,11 +129,34 @@ final class ClassifierTest {
       final double learningRate = Double.parseDouble(sc.nextLine().trim());
       System.out.print("Enter maximum number of epochs: ");
       final long maxEpochs = Long.parseLong(sc.nextLine().trim());
-      {
-        final var perceptron = new PerceptronClassifier<>(inFeatures.length, learningRate, maxEpochs, Double.MIN_NORMAL,
-            ActivationFunction.SIGMOID, LossFunction.MEAN_SQUARED_ERROR, rng);
+      /*{
+        final var perceptron = new PerceptronClassifier<String>(inFeatures.length, learningRate, maxEpochs, Double.MIN_NORMAL,
+            ActivationFunction.SIGMOID, LossFunction.SOFTMAX_LOG_LOSS, rng);
         perceptron.setEpochNotifier(e -> System.out.printf("epoch %d/%d\r", e, maxEpochs));
         testClassifier(perceptron, inputTrain, outcomeTrain, inputTest, outcomeTest);
+      }
+      
+      System.gc();
+      System.out.println();*/ 
+
+      System.out.print("Enter hidden layer sizes separated by space: ");
+      final var hiddenLayerSizes = Stream.of(sc.nextLine().split("\\s"))
+          .filter(s -> !s.isBlank())
+          .mapToInt(Integer::parseInt).toArray();
+      System.out.println("Number of hidden layers: "+hiddenLayerSizes.length);
+      {
+        final var mlp = new MLPClassifier<String>(
+            inFeatures.length, 
+            hiddenLayerSizes, 
+            learningRate, 
+            maxEpochs, 
+            -1d,
+            ActivationFunction.SIGMOID,
+            ActivationFunction.SIGMOID,
+            LossFunction.SOFTMAX_LOG_LOSS,
+            rng);
+        mlp.setEpochLossNotifier((e, l) -> System.out.printf("epoch %d/%d; loss %f\r", e, maxEpochs, l));
+        testClassifier(mlp, inputTrain, outcomeTrain, inputTest, outcomeTest);
       }
 
       /*System.gc();

@@ -40,6 +40,9 @@ public interface ActivationFunction extends DoubleUnaryOperator {
     };
   }
 
+  /** Half parabola, 0 when input is less than 0. */
+  public static final ActivationFunction HALF_PARABOLA = of(x -> x > 0d ? x * x : 0d, x -> x > 0d ? 2 * x : 0d);
+
   /** Identity activation function and it's derivative (constant {@code 1.0D}). */
   public static final ActivationFunction IDENTITY = of(DoubleUnaryOperator.identity(), x -> 1d);
 

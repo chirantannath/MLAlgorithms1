@@ -43,6 +43,11 @@ public class Perceptron {
   protected final double[] outputs;
   /** Delta matrix to change weights. Cache this to prevent reallocations. */
   private SoftReference<double[][]> deltaCache = null;
+  /**
+   * Derivatives of the loss function with respect to net input values to output
+   * layer. Cache this to prevent reallocations.
+   */
+  private SoftReference<double[]> betaCache = null;
 
   public Perceptron(
       int inputLayerSize,
@@ -164,7 +169,7 @@ public class Perceptron {
       outputs[i] = activationFunction.applyAsDouble(netInputs[i]);
   }
 
-  protected double[][] getDeltas() {
+  protected double[][] getWeightDeltas() {
     double[][] deltas = (deltaCache == null) ? null : deltaCache.get();
     if (deltas == null) {
       deltas = new double[outputLayerSize][inputLayerSize + 1];
@@ -173,18 +178,32 @@ public class Perceptron {
     return deltas;
   }
 
-  protected double fillDeltas(double[] expectedValues, LossFunction lossFunction, double learningRate,
-      double[][] deltas) {
+  protected double[] getBetas() {
+    double[] betas = (betaCache == null) ? null : betaCache.get();
+    if (betas == null) {
+      betas = new double[outputs.length];
+      betaCache = new SoftReference<>(betas);
+    }
+    return betas;
+  }
+
+  protected void fillBetas(double[] expectedValues, LossFunction lossFunction, double[] betas) {
     if (outputLayerSize != expectedValues.length)
       throw new IllegalArgumentException();
+
+    for (int outputIndex = 0; outputIndex < outputs.length; outputIndex++)
+      betas[outputIndex] = lossFunction.applyDerivativeWRTActual(expectedValues, outputs, outputIndex)
+          * activationFunction.applyDerivative(netInputs[outputIndex]);
+  }
+
+  protected double fillWeightDeltas(double[] betas, double learningRate,
+      double[][] deltas) {
 
     double changeMax = 0, change;
     for (int inputIndex = 0; inputIndex < inputs.length; inputIndex++) {
       for (int outputIndex = 0; outputIndex < outputs.length; outputIndex++) {
         deltas[outputIndex][inputIndex] = change = isWeightFixed(outputIndex, inputIndex) ? 0d
-            : -learningRate
-                * lossFunction.applyDerivativeWRTActual(expectedValues, outputs, outputIndex)
-                * activationFunction.applyDerivative(netInputs[outputIndex]) * inputs[inputIndex];
+            : -learningRate * betas[outputIndex] * inputs[inputIndex];
         changeMax = Math.max(changeMax, Math.abs(change));
       }
     }
@@ -196,43 +215,11 @@ public class Perceptron {
     if (outputLayerSize != expectedValues.length)
       throw new IllegalArgumentException("expectedValues");
 
-    final double[][] deltas = getDeltas();
-    double changeMax = fillDeltas(expectedValues, lossFunction, learningRate, deltas);
+    final double[][] deltas = getWeightDeltas();
+    final double[] betas = getBetas();
+    fillBetas(expectedValues, lossFunction, betas);
+    double changeMax = fillWeightDeltas(betas, learningRate, deltas);
     Utils.matrixAddAccumulate(weights, deltas);
     return changeMax;
   }
-
-  /*public static double adjustWeightsBatched(final Perceptron rootPerceptron,
-      final Stream<Pair<double[], double[]>> trainingValues, final LossFunction lossFunction,
-      final double learningRate) {
-    final DoubleAccumulator[][] deltas = new DoubleAccumulator[rootPerceptron.outputLayerSize][rootPerceptron.inputLayerSize
-        + 1];
-    for (int wr = 0; wr < rootPerceptron.outputLayerSize; wr++)
-      for (int wc = 0; wc <= rootPerceptron.inputLayerSize; wc++)
-        deltas[wr][wc] = new DoubleAccumulator((a, b) -> a + b, 0d);
-
-    final DoubleAccumulator changes = new DoubleAccumulator(Math::max, 0d);
-    final ThreadLocal<Perceptron> clonedPerceptrons = ThreadLocal.withInitial(() -> new Perceptron(rootPerceptron));
-
-    trainingValues.forEachOrdered(pair -> {
-      final var perceptron = clonedPerceptrons.get();
-      final var input = pair.first();
-      System.arraycopy(input, 0, perceptron.inputs, 0, rootPerceptron.inputLayerSize);
-      perceptron.processInput();
-      final var expected = pair.second();
-      final var subDeltas = perceptron.getDeltas();
-      double change = perceptron.fillDeltas(expected, lossFunction, learningRate, subDeltas);
-      changes.accumulate(change);
-      for (int wr = 0; wr < rootPerceptron.outputLayerSize; wr++)
-        for (int wc = 0; wc <= rootPerceptron.inputLayerSize; wc++)
-          deltas[wr][wc].accumulate(subDeltas[wr][wc]);
-    });
-
-    for (int wr = 0; wr < rootPerceptron.outputLayerSize; wr++)
-      for (int wc = 0; wc <= rootPerceptron.inputLayerSize; wc++)
-        rootPerceptron.weights[wr][wc] += deltas[wr][wc].get();
-    
-    return changes.get();
-  }*/
-
 }

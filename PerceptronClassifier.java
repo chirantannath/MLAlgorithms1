@@ -8,7 +8,7 @@ public class PerceptronClassifier<C> implements Classifier<Float64Row, C> {
 
   public final int rowLength;
 
-  public double learningRate;
+  public final double learningRate;
 
   public final long maxEpochs;
 
@@ -117,11 +117,11 @@ public class PerceptronClassifier<C> implements Classifier<Float64Row, C> {
     if (classesSeenList instanceof ArrayList<?> al)
       al.trimToSize();
     classesSeenList = Collections.unmodifiableList(classesSeenList);
-    //final int numClasses = classesSeenList.size();
+    final int numClasses = classesSeenList.size();
 
     mainPerceptron = new Perceptron(
         rowLength, // input size
-        classesSeenList.size(), // one output value for each class, in the given order
+        numClasses, // one output value for each class, in the given order
         activationFunction,
         initialWeightsGenerator);
 
@@ -144,7 +144,7 @@ public class PerceptronClassifier<C> implements Classifier<Float64Row, C> {
       }
 
       if (epochNotifier != null)
-        epochNotifier.accept(epoch);
+        epochNotifier.accept(epoch + 1);
       if (epochMaxDelta <= maxDeltaThreshold)
         break;
     }
