@@ -28,7 +28,7 @@ public class PerceptronClassifier<C> implements Classifier<Float64Row, C> {
 
   protected final ThreadLocal<SoftReference<Perceptron>> threadLocalPerceptrons = new ThreadLocal<>();
 
-  protected LongConsumer epochNotifier = null;
+  protected BiConsumer<? super Long, ? super Double> epochLossNotifier = null;
 
   public PerceptronClassifier(
       int rowLength,
@@ -81,7 +81,8 @@ public class PerceptronClassifier<C> implements Classifier<Float64Row, C> {
   }
 
   public PerceptronClassifier(int rowLength, double learningRate, long maxEpochs, double maxDeltaThreshold) {
-    this(rowLength, learningRate, maxEpochs, maxDeltaThreshold, ActivationFunction.SIGMOID, LossFunction.LOG_LOSS);
+    this(rowLength, learningRate, maxEpochs, maxDeltaThreshold, ActivationFunction.SIGMOID,
+        LossFunction.SOFTMAX_LOG_LOSS);
   }
 
   public PerceptronClassifier(int rowLength, double learningRate, long maxEpochs) {
@@ -104,8 +105,8 @@ public class PerceptronClassifier<C> implements Classifier<Float64Row, C> {
     }
   }
 
-  public synchronized void setEpochNotifier(LongConsumer notifier) {
-    epochNotifier = notifier;
+  public synchronized void setEpochLossNotifier(BiConsumer<? super Long, ? super Double> notifier) {
+    epochLossNotifier = notifier;
   }
 
   @Override
@@ -126,9 +127,11 @@ public class PerceptronClassifier<C> implements Classifier<Float64Row, C> {
         initialWeightsGenerator);
 
     double[] expectedValues = new double[mainPerceptron.outputLayerSize];
+    double[] actualValues = new double[mainPerceptron.outputLayerSize];
     Arrays.fill(expectedValues, 0d);
     for (long epoch = 0; epoch < maxEpochs; epoch++) {
       double epochMaxDelta = 0d; // Don't remove this default
+      double totalLoss = 0d;
 
       for (var input : data) {
         var row = input.first();
@@ -136,15 +139,23 @@ public class PerceptronClassifier<C> implements Classifier<Float64Row, C> {
         for (int i = 0; i < rowLength; i++)
           mainPerceptron.setInput(i, row.getAsDouble(i));
         mainPerceptron.processInput();
+
         expectedValues[clsIndex] = 1d;
+
+        if (epochLossNotifier != null) {
+          for (int i = 0; i < mainPerceptron.outputLayerSize; i++)
+            actualValues[i] = mainPerceptron.getOutput(i);
+          totalLoss += lossFunction.applyAsDouble(expectedValues, actualValues);
+        }
+
         double maxDelta = mainPerceptron.adjustWeights(expectedValues, lossFunction,
             learningRate);
         expectedValues[clsIndex] = 0d;
         epochMaxDelta = Math.max(epochMaxDelta, maxDelta);
       }
 
-      if (epochNotifier != null)
-        epochNotifier.accept(epoch + 1);
+      if (epochLossNotifier != null)
+        epochLossNotifier.accept(epoch + 1, totalLoss / data.size());
       if (epochMaxDelta <= maxDeltaThreshold)
         break;
     }

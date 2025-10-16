@@ -102,7 +102,7 @@ final class ClassifierTest {
       System.gc();
       System.out.println();
 
-      /*System.out.print("Enter decision tree real value binning splits: ");
+      System.out.print("Enter decision tree real value binning splits: ");
       final int realAttributeSplits = Integer.parseInt(sc.nextLine().trim());
       System.out.print("Enter decision tree max depth: ");
       final int depthLimit = Integer.parseInt(sc.nextLine().trim());
@@ -123,34 +123,34 @@ final class ClassifierTest {
       }
 
       System.gc();
-      System.out.println();*/
+      System.out.println();
 
       System.out.print("Enter learning rate for perceptrons: ");
       final double learningRate = Double.parseDouble(sc.nextLine().trim());
       System.out.print("Enter maximum number of epochs: ");
       final long maxEpochs = Long.parseLong(sc.nextLine().trim());
-      /*{
-        final var perceptron = new PerceptronClassifier<String>(inFeatures.length, learningRate, maxEpochs, Double.MIN_NORMAL,
-            ActivationFunction.SIGMOID, LossFunction.SOFTMAX_LOG_LOSS, rng);
-        perceptron.setEpochNotifier(e -> System.out.printf("epoch %d/%d\r", e, maxEpochs));
+      {
+        final var perceptron = new PerceptronClassifier<String>(inFeatures.length, learningRate, maxEpochs, -1d,
+            ActivationFunction.IDENTITY, LossFunction.SOFTMAX_LOG_LOSS, rng);
+        perceptron.setEpochLossNotifier((e, l) -> System.out.printf("epoch %d/%d; loss %f\r", e, maxEpochs, l));
         testClassifier(perceptron, inputTrain, outcomeTrain, inputTest, outcomeTest);
       }
-      
+
       System.gc();
-      System.out.println();*/ 
+      System.out.println();
 
       System.out.print("Enter hidden layer sizes separated by space: ");
       final var hiddenLayerSizes = Stream.of(sc.nextLine().split("\\s"))
           .filter(s -> !s.isBlank())
           .mapToInt(Integer::parseInt).toArray();
-      System.out.println("Number of hidden layers: "+hiddenLayerSizes.length);
+      System.out.println("Number of hidden layers: " + hiddenLayerSizes.length);
       {
         final var mlp = new MLPClassifier<String>(
-            inFeatures.length, 
-            hiddenLayerSizes, 
-            learningRate, 
-            maxEpochs, 
-            -1d,
+            inFeatures.length,
+            hiddenLayerSizes,
+            learningRate,
+            maxEpochs,
+            Double.MIN_NORMAL,
             ActivationFunction.SIGMOID,
             ActivationFunction.SIGMOID,
             LossFunction.SOFTMAX_LOG_LOSS,
@@ -159,14 +159,14 @@ final class ClassifierTest {
         testClassifier(mlp, inputTrain, outcomeTrain, inputTest, outcomeTest);
       }
 
-      /*System.gc();
+      System.gc();
       System.out.println();
 
       System.out.print("Enter KNN parameter K: ");
       final int K = Integer.parseInt(sc.nextLine().trim());
       System.out.println("KNN parameter K: " + K);
       testClassifier(new KNearestNeighbors<>(K, Float64Row::distanceChebyshev), inputTrain, outcomeTrain, inputTest,
-          outcomeTest);*/
+          outcomeTest);
     }
   }
 

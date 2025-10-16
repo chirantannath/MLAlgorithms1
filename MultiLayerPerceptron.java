@@ -49,10 +49,12 @@ public class MultiLayerPerceptron {
   private SoftReference<double[][][]> deltaCache = null;
   /**
    * Stored reference of the derivative of the loss function with respect to the
-   * output at each layer, multiplied by the net input of the node in that layer.
-   * We call it the "beta" value here, but do note that most textbooks refer to
+   * output at each layer, multiplied by the derivative of that output with
+   * respect to the net input of the node in that layer.
+   * 
+   * <p>We call it the "beta" value here, but do note that most textbooks refer to
    * this as the <i>delta</i> values. We are using the "delta" name for something
-   * else (actual change in weight).
+   * else (actual change in weight).</p>
    */
   private SoftReference<double[][]> betaCache = null;
 

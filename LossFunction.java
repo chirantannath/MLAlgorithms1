@@ -112,7 +112,7 @@ public interface LossFunction extends ToDoubleBiFunction<double[], double[]> {
         softmaxSum += step;
         if (i == actualVariableIndex) expActual = step;
       }
-      return -expectedValues[actualVariableIndex] + evsum * expActual / softmaxSum;
+      return (evsum * expActual / softmaxSum) - expectedValues[actualVariableIndex];
     }
     
   };

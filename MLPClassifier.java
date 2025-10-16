@@ -113,7 +113,7 @@ public class MLPClassifier<C> implements Classifier<Float64Row, C> {
   public MLPClassifier(int rowLength, int[] hiddenLayerSizes, double learningRate, long maxEpochs,
       double maxDeltaThreshold, ActivationFunction hiddenActivationFunction) {
     this(rowLength, hiddenLayerSizes, learningRate, maxEpochs, maxDeltaThreshold, hiddenActivationFunction,
-        ActivationFunction.SIGMOID, LossFunction.LOG_LOSS);
+        ActivationFunction.SIGMOID, LossFunction.SOFTMAX_LOG_LOSS);
   }
 
   public MLPClassifier(int rowLength, int[] hiddenLayerSizes, double learningRate, long maxEpochs,
@@ -201,7 +201,7 @@ public class MLPClassifier<C> implements Classifier<Float64Row, C> {
     double[] expectedValues = new double[mainPerceptron.outputLayerSize];
     double[] actualValues = new double[mainPerceptron.outputLayerSize];
     Arrays.fill(expectedValues, 0d);
-    final var trainingLossFunction = LossFunction.scaledLossFunction(lossFunction, 1d / data.size());
+    //final var trainingLossFunction = LossFunction.scaledLossFunction(lossFunction, 1d / data.size());
     //double oldTotalLoss = -1;
     for (long epoch = 0; epoch < maxEpochs; epoch++) {
       double epochMaxDelta = 0d; // don't remove this default
@@ -219,17 +219,17 @@ public class MLPClassifier<C> implements Classifier<Float64Row, C> {
         if (epochLossNotifier != null) {
           for (int i = 0; i < mainPerceptron.outputLayerSize; i++)
             actualValues[i] = mainPerceptron.getNetworkOutput(i);
-          totalLoss += trainingLossFunction.applyAsDouble(expectedValues, actualValues);
+          totalLoss += lossFunction.applyAsDouble(expectedValues, actualValues);
         }
 
-        double maxDelta = mainPerceptron.adjustWeights(expectedValues, trainingLossFunction,
+        double maxDelta = mainPerceptron.adjustWeights(expectedValues, lossFunction,
             learningRate);
         expectedValues[clsIndex] = 0d;
         epochMaxDelta = Math.max(epochMaxDelta, maxDelta);
       }
 
       if (epochLossNotifier != null)
-        epochLossNotifier.accept(epoch + 1, totalLoss);
+        epochLossNotifier.accept(epoch + 1, totalLoss / data.size());
       if (epochMaxDelta <= maxDeltaThreshold)
         break;
 
